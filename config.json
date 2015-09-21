@@ -1,0 +1,18 @@
+{
+   "name": "portfolio-item-cost-tracking",
+   "className": "PortfolioItemCostTracking",
+   "server": "https://rally1.rallydev.com/",
+   "sdk": "2.0",
+   "javascript": [
+      "App.js",
+      "Settings.js",
+      "WsapiToolbox.js",
+      "CostCalculator.js",
+      "CostPerProjectSettings.js",
+      "PortfolioItemTree.js",
+      "RollupDataItem.js"
+   ],
+   "css": [
+      "app.css"
+   ]
+}

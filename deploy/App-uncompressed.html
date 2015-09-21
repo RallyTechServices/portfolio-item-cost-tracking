@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>portfolio-item-cost-tracking</title>
+
+    <script type="text/javascript" src="/apps/2.0/sdk.js"></script>
+
+    <script type="text/javascript">
+        Rally.onReady(function () {
+                Ext.define('PortfolioItemCostTracking', {
+    extend: 'Rally.app.App',
+    componentCls: 'app',
+
+    defaults: {
+        margin: 10,
+        startDate: new Date('2015-01-01'),
+        endDate: new Date('2015-12-31'),
+        groupByRelease: false
+    },
+
+    items: [{
+        xtype: 'container',
+        cls: 'header',
+        layout: {
+            type: 'hbox'
+        }
+    },{
+        xtype: 'container',
+        cls: 'body'
+    }],
+
+    config: {
+        defaultSettings: {
+            calculationType: 'points',
+            normalizedCostPerUnit: 1000,
+            projectCostPerUnit: {},
+            currencySign: '$'
+        }
+    },
+
+    portfolioItemRollupData: {},
+
+    launch: function() {
+        Deft.Promise.all([
+            PortfolioItemCostTracking.WsapiToolbox.fetchPortfolioItemTypes(),
+            PortfolioItemCostTracking.WsapiToolbox.fetchDoneStates()
+        ]).then({
+            scope: this,
+            success: function(results){
+                this.portfolioItemTypes = results[0];
+
+                this._initializeSettings(this.getSettings(), results[1]);
+                this._initializeUI();
+            },
+            failure: function(msg){
+                Rally.ui.notify.Notifier.showError({message: msg});
+            }
+        });
+    },
+    _initializeSettings: function(settings, doneScheduleStates){
+
+
+        PortfolioItemCostTracking.CostCalculator.notAvailableText = "N/A";
+        PortfolioItemCostTracking.CostCalculator.currencySign = settings.currencySign;
+        PortfolioItemCostTracking.CostCalculator.currencyPrecision = 0;
+        PortfolioItemCostTracking.CostCalculator.currencyEnd = false;
+        PortfolioItemCostTracking.CostCalculator.completedScheduleStates = doneScheduleStates;
+
+        PortfolioItemCostTracking.CostCalculator.normalizedCostPerUnit = settings.normalizedCostPerUnit;
+
+        var project_cpu = settings.projectCostPerUnit || {};
+        if (!Ext.isObject(project_cpu)){
+            project_cpu = Ext.JSON.decode(project_cpu);
+        }
+        PortfolioItemCostTracking.CostCalculator.projectCostPerUnit = project_cpu;
+
+        PortfolioItemCostTracking.CostCalculator.calculationType = settings.calculationType || 'points';
+    },
+    _initializeUI: function(){
+        var header = this.down('container[cls=header]');
+        header.removeAll();
+
+        header.add({
+            xtype: 'rallydatefield',
+            itemId: 'dt-start',
+            stateful: true,
+            stateId: this.getContext().getScopedStateId('dt-start'),
+            stateEvents: ['change'],
+            value: this.defaults.startDate,
+            margin: this.defaults.margin,
+            fieldLabel: 'Start Date',
+            labelSeparator: '',
+            labelAlign: 'top',
+            listeners: {
+                scope: this,
+                change: this.refreshData
+            }
+        });
+
+        header.add({
+            xtype: 'rallydatefield',
+            itemId: 'dt-end',
+            stateful: true,
+            stateId: this.getContext().getScopedStateId('dt-end'),
+            stateEvents: ['change'],
+            value: this.defaults.endDate,
+            margin: this.defaults.margin,
+            labelSeparator: '',
+            fieldLabel: 'End Date',
+            labelAlign: 'top',
+            listeners: {
+                scope: this,
+                change: this.refreshData
+            }
+        });
+
+        header.add({
+            xtype: 'rallyportfolioitemtypecombobox',
+            itemId: 'cb-type',
+            stateful: true,
+            stateId: this.getContext().getScopedStateId('cb-type'),
+            stateEvents: ['change'],
+            margin: this.defaults.margin,
+            fieldLabel: 'Portfolio Item Type',
+            labelAlign: 'top',
+            listeners: {
+                scope: this,
+                change: this.refreshData,
+                ready: this.refreshData
+            }
+        });
+
+        //header.add({
+        //    xtype: 'rallybutton',
+        //    cls: 'rly-small secondary',
+        //    iconCls: 'icon-export',
+        //    iconOnly: true,
+        //    margin: this.defaults.margin
+        //});
+    },
+    _getCmpValue: function(scope, item_id){
+        var cmp = scope.down(item_id) || null;
+        if (cmp){
+            return cmp.getValue() || null;
+        }
+        return null;
+    },
+    _getModel: function(){
+        var cmp = this.down('#cb-type') || null;
+        if (cmp){
+            return cmp.getRecord().get('TypePath');
+        }
+        return null;
+    },
+    _getDateFilters: function(start_date, end_date){
+
+        var filter_actual = [{
+            property: 'ActualEndDate',
+            operator: '>=',
+            value: Rally.util.DateTime.toIsoString(start_date)
+        },{
+            property: 'ActualEndDate',
+            operator: '<',
+            value: Rally.util.DateTime.toIsoString(end_date)
+        }];
+        filter_actual = Rally.data.wsapi.Filter.and(filter_actual);
+
+        var filter_planned = [{
+            property: 'ActualEndDate',
+            value: null
+        },{
+            property: 'PlannedEndDate',
+            operator: '<',
+            value: Rally.util.DateTime.toIsoString(end_date)
+        },{
+            property: 'PlannedEndDate',
+            operator: '>=',
+            value: Rally.util.DateTime.toIsoString(start_date)
+        }];
+        filter_planned = Rally.data.wsapi.Filter.and(filter_planned);
+
+        return filter_actual.or(filter_planned);
+    },
+    refreshData: function(cmp){
+        var start_date = this._getCmpValue(this, '#dt-start'),
+            end_date = this._getCmpValue(this, '#dt-end'),
+            model = this._getModel();
+
+        this.getBody().removeAll();
+
+        if (start_date === null || end_date === null || model === null){
+            this.getBody().add({
+                xtype: 'container',
+                html: 'Please select a Start Date, End Date and Portfolio Item Type.'
+            });
+            return;
+        }
+        cmp.suspendEvents(false);
+
+        var filters = this._getDateFilters(start_date, end_date),
+            me = this;
+
+        Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
+            models: [model],
+            filters: filters,
+            autoLoad: true,
+            fetch: ['FormattedID','Name','Project','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children'],
+            enableHierarchy: true,
+            pageSize: 2,
+            listeners: {
+                scope: me,
+                load: me._setRollupData
+            }
+        }).then({
+            scope: this,
+            success: function(store) {
+                store.model.addField({name: '_rollupDataPreliminaryBudget', type: 'auto', defaultValue: null});
+                store.model.addField({name: '_rollupDataTotalCost', type: 'auto', defaultValue: null});
+                store.model.addField({name: '_rollupDataRemainingCost', type: 'auto', defaultValue: null});
+                store.model.addField({name: '_rollupDataToolTip', type: 'string', defaultValue: null});
+
+                this._updateDisplay(store);
+            }
+        }).always(function(){
+            cmp.resumeEvents();
+        });
+    },
+    _getStoryFetch: function(){
+        var fetch = ['ObjectID','Project','ScheduleState','PortfolioItem'];
+        if (PortfolioItemCostTracking.CostCalculator.calculationType === 'points'){
+            fetch.push('PlanEstimate');
+        }
+        if (PortfolioItemCostTracking.CostCalculator.calculationType === 'taskHours'){
+            fetch = fetch.concat(['TaskEstimateTotal','TaskActualTotal','TaskRemainingTotal']);
+        }
+        return fetch;
+
+    },
+    _setRollupData: function(store, node, records, success){
+        console.log('app.js _setRollupData', store, node, records, success);
+        var rollup_data = this.rollupData;
+        if (!rollup_data) {
+            this.rollupData = Ext.create('PortfolioItemCostTracking.RollupData',{
+                storyFetch: this._getStoryFetch(),
+                portfolioItemTypes: this.portfolioItemTypes,
+                listeners: {
+                    scope: this,
+                    dataUpdated: function(record){
+                        console.log('dataChanged', this.rollupData.data, this.down('rallytreegrid').getStore());
+                        //this.down('rallytreegrid').getStore().sync();
+                        //this.down('rallytreegrid').getView().refresh();
+                    }
+                }
+            });
+            rollup_data = this.rollupData;
+        }
+
+        _.each(records, function(r) {
+            rollup_data.setRollupData(r);
+        }, this);
+    },
+    _updateDisplay: function(store){
+        this.getBody().add({
+            xtype: 'rallytreegrid',
+            columnCfgs: this._getColumnCfgs(),
+            store: store
+        });
+    },
+    _getColumnCfgs: function(){
+
+        return [{
+            dataIndex: 'Name',
+            text: 'Name',
+            flex: 5
+        },{
+            dataIndex: 'Project',
+            text: 'Project',
+            editor: false
+        },{
+            dataIndex: 'PreliminaryEstimate',
+            text: 'Preliminary Budget',
+            align: 'right',
+            editor: false,
+            renderer: PortfolioItemCostTracking.CostCalculator.preliminaryBudgetRenderer
+        }, {
+            dataIndex: 'PercentDoneByStoryPlanEstimate',
+            text: '% Done by Story Points'
+        },{
+            dataIndex: "ObjectID",
+            text: "Actual Cost",
+            renderer: PortfolioItemCostTracking.CostCalculator.actualCostRenderer
+        },{
+            dataIndex: "ObjectID",
+            text: "Remaining Cost",
+            renderer: PortfolioItemCostTracking.CostCalculator.costRemainingRenderer
+        }];
+    },
+
+    getBody: function(){
+        return this.down('container[cls=body]');
+    },
+    getSettingsFields: function() {
+        return PortfolioItemCostTracking.Settings.getFields();
+    },
+    onSettingsUpdate: function (settings){
+        //console.log('onSettingsUpdate', settings);
+        this.rollupData.clearRollupData();
+        this._initializeSettings(settings);
+        this._initializeUI();
+    }
+});
+
+                Ext.define('PortfolioItemCostTracking.Settings', {
+    singleton: true,
+
+    currencyData: [
+        {name: "US Dollars", value: "$"}
+    ],
+
+    getFields: function(config) {
+
+
+        var currency_store = Ext.create('Rally.data.custom.Store', {
+            data: this.currencyData
+        });
+
+        return [{
+            xtype: 'rallycombobox',
+            name: 'currencySign',
+            store: currency_store,
+            displayField: 'name',
+            valueField: 'value',
+            fieldLabel:  'Currency',
+            labelAlign: 'top',
+            labelCls: 'lbl',
+            margin: '10 0 10 0'
+        },{
+            xtype: 'radiogroup',
+            fieldLabel: 'Calculate Cost',
+            labelAlign: "top",
+            labelCls: 'lbl',
+            columns: 1,
+            vertical: true,
+            margin: '10 0 10 0',
+            items: [
+                { boxLabel: 'Based on Story Points', name: 'calculationType',inputValue: 'points', checked: true },
+                { boxLabel: 'Based on Task Hours', name: 'calculationType',inputValue: 'taskHours'},
+                { boxLabel: 'Using Timesheets', name: 'calculationType',inputValue: 'timesheets' }
+            ]
+        },{
+            xtype: 'rallytextfield',
+            name: 'normalizedCostPerUnit',
+            fieldLabel: 'Normalized Cost Per Unit',
+            labelAlign: 'top',
+            labelCls: 'lbl',
+            width: 175,
+            margin: '25 0 0 0'
+        },{
+            xtype: 'costperprojectsettings',
+            name: 'projectCostPerUnit',
+            fieldLabel: 'Cost Per Unit by Team',
+            labelAlign: 'top',
+            labelCls: 'lbl',
+            margin: '25 0 0 0',
+            readyEvent: 'ready'
+        }];
+    }
+});
+                Ext.define('PortfolioItemCostTracking.WsapiToolbox', {
+    singleton: true,
+    fetchWsapiCount: function(model, query_filters){
+        var deferred = Ext.create('Deft.Deferred');
+
+        var store = Ext.create('Rally.data.wsapi.Store',{
+            model: model,
+            fetch: ['ObjectID'],
+            filters: query_filters,
+            limit: 1,
+            pageSize: 1
+        }).load({
+            callback: function(records, operation, success){
+                if (success){
+                    deferred.resolve(operation.resultSet.totalRecords);
+                } else {
+                    deferred.reject(Ext.String.format("Error getting {0} count for {1}: {2}", model, query_filters.toString(), operation.error.errors.join(',')));
+                }
+            }
+        });
+        return deferred;
+    },
+    fetchWsapiRecords: function(model, query_filters, fetch_fields){
+        var deferred = Ext.create('Deft.Deferred');
+
+        var store = Ext.create('Rally.data.wsapi.Store',{
+            model: model,
+            fetch: fetch_fields,
+            filters: query_filters,
+            limit: Infinity
+        }).load({
+            callback: function(records, operation, success){
+                if (success){
+                    deferred.resolve(records);
+                } else {
+                    deferred.reject(Ext.String.format("Error getting {0} for {1}: {2}", model, query_filters.toString(), operation.error.errors.join(',')));
+                }
+            }
+        });
+        return deferred;
+    },
+    fetchReleases: function(timebox){
+
+        var deferred = Ext.create('Deft.Deferred'),
+            rec = timebox.getRecord(),
+            me = this;
+
+        if (rec === null) {
+            deferred.resolve([]);
+        }
+
+        Ext.create('Rally.data.wsapi.Store',{
+            model: 'Release',
+            fetch: ['ObjectID'],
+            filters: [{
+                property: 'Name',
+                value: rec.get('Name')
+            },{
+                property: 'ReleaseStartDate',
+                value: rec.get('ReleaseStartDate')
+            },{
+                property: 'ReleaseDate',
+                value: rec.get('ReleaseDate')
+            }],
+            limit: Infinity
+        }).load({
+            callback: function(records, operation, success){
+                if (success){
+                    deferred.resolve(records);
+                }   else {
+                    deferred.reject("Error loading Releases: " + operation.error.errors.join(','));
+                }
+            }
+        });
+        return deferred;
+    },
+
+    fetchAllowedValues: function(model,field_name) {
+        var deferred = Ext.create('Deft.Deferred');
+
+        Rally.data.ModelFactory.getModel({
+            type: model,
+            success: function(model) {
+                model.getField(field_name).getAllowedValueStore().load({
+                    callback: function(records, operation, success) {
+                        var values = Ext.Array.map(records, function(record) {
+                            return record.get('StringValue');
+                        });
+                        deferred.resolve(values);
+                    }
+                });
+            },
+            failure: function(msg) { deferred.reject('Error loading field values: ' + msg); }
+        });
+        return deferred;
+    },
+    fetchPortfolioItemTypes: function(){
+        var deferred = Ext.create('Deft.Deferred');
+
+        var store = Ext.create('Rally.data.wsapi.Store', {
+            model: 'TypeDefinition',
+            fetch: ['TypePath', 'Ordinal'],
+            filters: [{
+                property: 'TypePath',
+                operator: 'contains',
+                value: 'PortfolioItem/'
+            }],
+            sorters: [{
+                property: 'Ordinal',
+                direction: 'ASC'
+            }]
+        });
+        store.load({
+            callback: function(records, operation, success){
+                if (success){
+                    var portfolioItemTypes = new Array(records.length);
+                    _.each(records, function(d){
+                        //Use ordinal to make sure the lowest level portfolio item type is the first in the array.
+                        var idx = Number(d.get('Ordinal'));
+                        portfolioItemTypes[idx] = d.get('TypePath');
+                        //portfolioItemTypes.reverse();
+                    });
+                    deferred.resolve(portfolioItemTypes);
+                } else {
+                    var error_msg = '';
+                    if (operation && operation.error && operation.error.errors){
+                        error_msg = operation.error.errors.join(',');
+                    }
+                    deferred.reject('Error loading Portfolio Item Types:  ' + error_msg);
+                }
+            }
+        });
+        return deferred.promise;
+    },
+    fetchDoneStates: function(){
+        var deferred = Ext.create('Deft.Deferred');
+        Rally.data.ModelFactory.getModel({
+            type: 'HierarchicalRequirement',
+            success: function(model) {
+                var field = model.getField('ScheduleState');
+                field.getAllowedValueStore().load({
+                    callback: function(records, operation, success) {
+                        if (success){
+                            var values = [];
+                            for (var i=records.length - 1; i > 0; i--){
+                                values.push(records[i].get('StringValue'));
+                                if (records[i].get('StringValue') == "Accepted"){
+                                    i = 0;
+                                }
+                            }
+                            deferred.resolve(values);
+                        } else {
+                            deferred.reject('Error loading ScheduleState values for User Story:  ' + operation.error.errors.join(','));
+                        }
+                    },
+                    scope: this
+                });
+            },
+            failure: function() {
+                var error = "Could not load schedule states";
+                deferred.reject(error);
+            }
+        });
+        return deferred.promise;
+    }
+});
+
+                Ext.define('PortfolioItemCostTracking.CostCalculator', {
+    singleton: true,
+
+    calculationTypeStoryPoints: 'points',
+    calculationTypeTaskHours: 'taskHours',
+    calculationTypeTimesheets: 'timesheets',
+    calculationType: undefined,
+
+    /**
+     * Currency display settings to pass into the Ext.util.Format currency function
+     */
+    currencySign: '$',
+    currencyPrecision: 0,
+    currencyEnd: false,
+
+    notAvailableText: '',
+    normalizedCostPerUnit: 1,
+    projectCostPerUnit: {},
+
+    completedScheduleStates: [],
+
+    getCostPerUnit: function(project_ref){
+        console.log('getCostPerUnit', project_ref, this.projectCostPerUnit);
+        return this.projectCostPerUnit[project_ref] || this.normalizedCostPerUnit;
+    },
+    calculateTotalCostForStory: function(data){
+        switch(PortfolioItemCostTracking.CostCalculator.calculationType){
+
+            case 'points':
+               if (data.PlanEstimate){
+                    return data.PlanEstimate * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(data.Project._ref);
+               }
+               return null;
+
+            case 'taskHours':
+                //return data.TaskEstimateTotal * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(data.Project._ref);
+                return (data.TaskRemainingTotal + data.TaskActualTotal) * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(data.Project._ref);
+
+            case 'timesheets':
+                return 2;
+        }
+        return null;
+    },
+    calculateActualCostForStory: function(data){
+        switch(PortfolioItemCostTracking.CostCalculator.calculationType){
+
+            case 'points':
+                if (data.PlanEstimate && Ext.Array.contains(PortfolioItemCostTracking.CostCalculator.completedScheduleStates, data.ScheduleState)) {
+                    return data.PlanEstimate * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(data.Project._ref);
+                }
+                break;
+
+            case 'taskHours':
+                return data.TaskActualTotal * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(data.Project._ref);
+
+            case 'timesheets':
+                return 1;
+        }
+        return null;
+    },
+    formatCost: function(cost){
+        return Ext.util.Format.currency(cost, this.currencySign, this.currencyPrecision, this.currencyEnd);
+    },
+    actualCostRenderer: function(value,metaData,record){
+        var cr = PortfolioItemCostTracking.CostCalculator.notAvailableText;
+        if (!isNaN(record.get('_rollupDataTotalCost'))){
+            return PortfolioItemCostTracking.CostCalculator.formatCost(record.get('_rollupDataTotalCost'));
+        }
+        return cr;
+    },
+    costRemainingRenderer: function(value, metaData, record){
+        var cr = PortfolioItemCostTracking.CostCalculator.notAvailableText;
+        if (!isNaN(record.get('_rollupDataRemainingCost'))){
+            return PortfolioItemCostTracking.CostCalculator.formatCost(record.get('_rollupDataRemainingCost'));
+        }
+        return cr;
+    },
+    preliminaryBudgetRenderer: function(value,metaData,record){
+        var pb = PortfolioItemCostTracking.CostCalculator.notAvailableText;
+        if (value && value.Value){
+            var cpu = PortfolioItemCostTracking.CostCalculator.getCostPerUnit(record.get('Project')._ref);
+            pb = PortfolioItemCostTracking.CostCalculator.formatCost(cpu * value.Value);
+        }
+        return pb;
+    }
+
+});
+
+                Ext.define('PortfolioItemCostTracking.CostPerProjectSettings',{
+    extend: 'Ext.form.field.Base',
+    alias: 'widget.costperprojectsettings',
+    config: {
+        value: undefined,
+        decodedValue: {}
+    },
+    fieldSubTpl: '<div id="{id}" class="settings-grid"></div>',
+    width: '100%',
+    cls: 'column-settings',
+
+    store: undefined,
+
+    onDestroy: function() {
+        if (this._grid) {
+            this._grid.destroy();
+            delete this._grid;
+        }
+        this.callParent(arguments);
+    },
+    initComponent: function(){
+
+        this.callParent();
+        this.addEvents('ready');
+
+        var store = Ext.create('Rally.data.wsapi.Store', {
+            model: 'Project',
+            fetch: ['Name'],
+            context: {
+                project: null
+            },
+            limit: 'Infinity'
+        });
+        store.load({
+            scope: this,
+            callback: this._buildProjectGrid
+        });
+
+    },
+
+    _buildProjectGrid: function(records, operation, success){
+
+        var decodedValue = {};
+
+        if (this.value && !_.isEmpty(this.value)){
+            decodedValue = Ext.JSON.decode(this.value);
+        }
+
+        var data = [],
+            empty_text = "No Data";
+
+        if (success) {
+            data = _.map(records, function(project){
+                var cost = decodedValue[project.get('_ref')] || null;
+                return {projectRef: project.get('_ref'), projectName: project.get('Name'), cost: cost};
+            });
+        } else {
+            empty_text = "Error(s) fetching Project data: <br/>" + operation.error.errors.join('<br/>');
+        }
+
+        var custom_store = Ext.create('Ext.data.Store', {
+            fields: ['projectRef', 'projectName', 'cost'],
+            data: data
+        });
+
+        this._grid = Ext.create('Rally.ui.grid.Grid', {
+            autoWidth: true,
+            renderTo: this.inputEl,
+            columnCfgs: this._getColumnCfgs(),
+            showRowActionsColumn: false,
+            showPagingToolbar: false,
+            store: custom_store,
+            maxHeight: 300,
+            emptyText: empty_text,
+            editingConfig: {
+                publishMessages: false
+            }
+        });
+
+       this.fireEvent('ready', true);
+    },
+    _getColumnCfgs: function() {
+
+        var columns = [
+            {
+                text: 'Project',
+                dataIndex: 'projectRef',
+                flex: 1,
+                editor: false,
+                renderer: function(v, m, r){
+                    return r.get('projectName');
+                },
+                getSortParam: function(v,m,r){
+                    return 'projectName';
+                }
+            },{
+                text: 'Cost Per Unit',
+                dataIndex: 'cost',
+                editor: {
+                    xtype: 'rallynumberfield'
+                },
+                renderer: function(v){
+                    if (v && v > 0){
+                        return v;
+                    }
+                    return "Use Default";
+                }
+            }];
+        return columns;
+    },
+    /**
+     * When a form asks for the data this field represents,
+     * give it the name of this field and the ref of the selected project (or an empty string).
+     * Used when persisting the value of this field.
+     * @return {Object}
+     */
+    getSubmitData: function() {
+        var data = {};
+        data[this.name] = Ext.JSON.encode(this._buildSettingValue());
+        return data;
+    },
+    _buildSettingValue: function() {
+        var mappings = {};
+        var store = this._grid.getStore();
+
+        store.each(function(record) {
+            if (record.get('cost') && record.get('projectRef')) {
+                mappings[record.get('projectRef')] = record.get('cost');
+            }
+        }, this);
+        return mappings;
+    },
+
+    getErrors: function() {
+        var errors = [];
+        //Add validation here
+        return errors;
+    },
+    setValue: function(value) {
+        this.callParent(arguments);
+        this._value = value;
+    }
+});
+
+                Ext.define('PortfolioItemCostTracking.RollupData',{
+    mixins: {
+        observable: 'Ext.util.Observable'
+    },
+    data: {},
+
+    keyField: 'ObjectID',
+    portfolioItemTypes: undefined,
+    sourceType: 'hierarchicalrequirement',
+
+    constructor: function(config){
+        this.portfolioItemTypes = _.map(config.portfolioItemTypes, function(p){return p.toLowerCase();});
+
+        this.mixins.observable.constructor.call(this, config);
+        this.addEvents(
+            'dataUpdated',
+            'error'
+        );
+    },
+    /**
+     * Clears out the data in the tree (called if settings are updated/changed, etc
+     */
+    clearRollupData: function(key){
+        if (key){
+            //Just clear this part of the tree
+            this.data[key] = null;
+        } else {
+            //Clear everything
+            this.data = {};
+        }
+    },
+    setRollupData: function(record){
+        var rollup_data = this.data[record.get(this.keyField)] || null;
+
+        if (rollup_data){
+            //If we already loaded the data, then use that, we don't want to take the time to reload.
+           this._setDataOnModel(record, rollup_data);
+           return;
+        }
+        this._buildRollupData(record);
+    },
+    _buildRollupData: function(record){
+        console.log('_buildRollupData',record.get('FormattedID'),record);
+
+        var key = record.get(this.keyField);
+        this.data[key] = this._getDataObj(record.getData(), record.get('_type'));
+
+        if (record.get('UserStories')){
+            this._fetchTopLevelUserStories([key]).then({
+                scope: this,
+                success: function(){
+                    console.log('_buildRollupData._fetchTopLevelUserStories success', this.data);
+                    this._calculateRollupData(key);
+                    this._setDataOnModel(record, this.data[key]);
+                },
+                failure: function(operation){
+                    console.log('_buildRollupData._fetchTopLevelUserStories failure', operation);
+                }
+            });
+            return;
+        }
+
+        if (record.get('Children') && record.get('Children').Count > 0){
+            var child_model_type = this._getChildPortfolioModelType(record.get('_type'));
+            this._fetchChildPortfolioItems(child_model_type, [key]).then({
+                scope: this,
+                success: function(){
+                    console.log('_buildRollupData._fetchChildPortfolioItems success', this.data);
+                    this._calculateRollupData(record);
+                    this._setDataOnModel(record, this.data[key]);
+                },
+                failure: function(operation){
+                    console.log('_buildRollupData._fetchChildPortfolioItems failure', operation);
+                }
+            });
+        } else {
+            console.log('_buildRollupData else', record);
+            this._calculateRollupData(record);
+            this._setDataOnModel(record, this.data[key]);
+        }
+    },
+    _getDataObj: function(data, type){
+        return new PortfolioItemCostTracking.RollupDataItem({
+            data: data,
+            type: type
+        });
+    },
+
+    _calculateRollupData: function(key){
+        var data = this.data[key] || null;
+        console.log('_calculateRollupData key, data, this.data',key, data, this.data);
+        if (data){
+            if (data.type.toLowerCase() === this.portfolioItemTypes[0].toLowerCase()){
+                console.log('before calculateRollupFromChildren');
+                data.calculateRollupFromChildren();
+            } else {
+                data.preliminaryBudget = 0;
+                data.totalCost = 0;
+                data.remainingCost = 0;
+                _.each(data.children, function(c){
+                    this._calculateRollupData(c[this.keyField]);
+                    data.preliminaryBudget += c.preliminaryBudget;
+                    data.totalCost += c.totalCost;
+                    data.remainingCost += c.remainingCost;
+                }, this);
+            }
+        }
+    },
+
+    _setDataOnModel: function(record, data){
+        record.set('_rollupDataPreliminaryBudget', data.preliminaryBudget || 0);
+        record.set('_rollupDataTotalCost',data.actualCost || 0);
+        record.set('_rollupDataRemainingCost', data.remainingCost || 0);
+        record.set('_rollupDataToolTip', data.tooltip || null);
+     },
+    _getChildPortfolioModelType: function(portfolioItemType){
+        var idx = _.indexOf(this.portfolioItemTypes, portfolioItemType.toLowerCase());
+        console.log('__getChildPortfolioModelType', portfolioItemType, this.portfolioItemTypes, idx);
+        if (idx > 0){
+            return this.portfolioItemTypes[idx - 1];
+        }
+        return null;
+    },
+    _fetchChildPortfolioItems: function(portfolioItemType, portfolioItemObjectIDs){
+
+        var portfolioItemFetch = ['ObjectID','Parent','Children','UserStories'];
+        var filters = _.map(portfolioItemObjectIDs, function(poid){
+            return {
+                property: 'Parent.ObjectID',
+                value: poid
+            };
+        });
+        filters = Rally.data.wsapi.Filter.or(filters);
+
+        return PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords(portfolioItemType,filters,portfolioItemFetch).then({
+            scope: this,
+            success: function(records){
+
+                var child_model_type = this._getChildPortfolioModelType(portfolioItemType);
+                _.each(records, function(r){
+                    if (r.get('Parent') && r.get('Parent').ObjectID){
+                        var parent = r.get('Parent').ObjectID;
+                        this.data[parent].addChild(r.getData());
+                        console.log(this.data[parent].children.length);
+                    }
+                    var obj_id = r.get('ObjectID');
+                    this.data[obj_id] = this._getDataObj(r.getData(),portfolioItemType);
+                }, this);
+
+                 var obj_ids = _.map(records, function(r){return r.get('ObjectID');});
+                 if (records.length > 0 && child_model_type){
+                     return this._fetchChildPortfolioItems(child_model_type, obj_ids);
+                 } else {
+                     return this._fetchTopLevelUserStories(obj_ids);
+                 }
+            }
+        });
+    },
+    _fetchTopLevelUserStories: function(portfolioItemObjectIDs){
+        var deferred = Ext.create('Deft.Deferred');
+
+        if (portfolioItemObjectIDs.length === 0){
+            deferred.resolve();
+        }
+
+        var filters = _.map(portfolioItemObjectIDs, function(pi_oid){
+            return {
+                property: 'PortfolioItem.ObjectID',
+                value: pi_oid
+            };
+        });
+        filters = Rally.data.wsapi.Filter.or(filters);
+
+        PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords('HierarchicalRequirement',filters,this.storyFetch).then({
+            scope: this,
+            success: function(records){
+                _.each(records, function(r){
+                    if (r.get('PortfolioItem') && r.get('PortfolioItem').ObjectID){
+                        var obj_id = r.get('PortfolioItem').ObjectID;
+                        this.data[obj_id].addChild(r.getData());
+                        console.log('adding children', this.data[obj_id].children.length);
+                        this.data[r.get('ObjectID')] = this._getDataObj(r.getData(), r.get('_type'));
+                    }
+                }, this);
+                console.log('data', this.data);
+                deferred.resolve();
+            },
+            failure: function(operation){
+                console.log('_fetchTopLevelUserStories failed', operation);
+                deferred.reject(operation);
+            }
+        });
+        return deferred;
+    }
+});
+                Ext.define('PortfolioItemCostTracking.RollupDataItem',{
+
+    children: undefined,
+    type: undefined,
+
+    preliminaryBudget: null,
+    actualCost: 0,
+    remainingCost: 0,
+    tooltip: undefined,
+    /**
+     * data is from the record associated with the rollup data
+     */
+    data: undefined,
+
+    constructor: function(config){
+        this.data = config.data;
+        this.type = config.type;
+
+        if (this.data.PreliminaryEstimate && this.data.PreliminaryEstimate.Value){
+            this.preliminaryBudget = this.data.PreliminaryEstimate.Value  * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(this.data.Project._ref);
+        }
+
+        if (this.type.toLowerCase() === 'hierarchicalrequirement' ){
+            this.actualCost = PortfolioItemCostTracking.CostCalculator.calculateActualCostForStory(this.data);
+            this.remainingCost = PortfolioItemCostTracking.CostCalculator.calculateTotalCostForStory(this.data) - this.actualCost;
+        }
+
+    },
+    addChild: function(child){
+        if (!this.children){
+            this.children = [];
+        }
+        this.children.push(child);
+    },
+    calculateRollupFromChildren: function(){
+        var actual_value = 0,
+            total_value = 0;
+
+        _.each(this.children, function (s) {
+            total_value += PortfolioItemCostTracking.CostCalculator.calculateTotalCostForStory(s);
+            actual_value += PortfolioItemCostTracking.CostCalculator.calculateActualCostForStory(s);
+        }, this);
+
+        this.actualCost = actual_value;
+        this.remainingCost = total_value - actual_value;
+    },
+    taskHours: function(){
+        var actual_value = 0,
+            total_value = 0,
+            remaining_value = 0;
+
+        _.each(this.children, function(s){
+            total_value += s.TaskEstimateTotal * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(s.Project._ref);
+            actual_value += s.TaskActualTotal * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(s.Project._ref);
+            remaining_value = s.TaskRemainingTotal * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(s.Project._ref);
+        }, this);
+
+        this.actualCost = actual_value;
+        this.remainingCost = total_value - actual_value;
+    },
+    timesheets: function(){
+        this.actualCost = 1;
+        this.remainingCost = 1;
+    }
+});
+
+
+            Rally.launchApp('PortfolioItemCostTracking', {
+                name:"portfolio-item-cost-tracking",
+	            parentRepos:""
+            });
+
+        });
+    </script>
+
+
+    <style type="text/css">
+        .app {
+  /* Add app styles here */
+}
+.lbl {
+  text-transform: uppercase;
+  font-family: ProximaNovaSemiBold, Helvetica, Arial;
+  font-size: 10px;
+}
+
+    </style>
+</head>
+<body>
+</body>
+</html>

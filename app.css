@@ -1,0 +1,10 @@
+.app {
+     /* Add app styles here */
+}
+
+.lbl {
+
+     text-transform: uppercase;
+     font-family: ProximaNovaSemiBold, Helvetica, Arial;
+     font-size: 10px;
+}
