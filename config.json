@@ -10,7 +10,8 @@
       "CostCalculator.js",
       "CostPerProjectSettings.js",
       "PortfolioItemTree.js",
-      "RollupDataItem.js"
+      "RollupDataItem.js",
+      "ProjectPicker.js"
    ],
    "css": [
       "app.css"

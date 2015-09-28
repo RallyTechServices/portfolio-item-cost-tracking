@@ -44,15 +44,18 @@ Ext.define('PortfolioItemCostTracking.CostPerProjectSettings',{
 
         if (this.value && !_.isEmpty(this.value)){
             decodedValue = Ext.JSON.decode(this.value);
+            console.log('decodedValue',decodedValue);
         }
 
         var data = [],
-            empty_text = "No Data";
+            empty_text = "No exceptions";
 
         if (success) {
-            data = _.map(records, function(project){
+            _.each(records, function(project){
                 var cost = decodedValue[project.get('_ref')] || null;
-                return {projectRef: project.get('_ref'), projectName: project.get('Name'), cost: cost};
+                if (cost){
+                    data.push({projectRef: project.get('_ref'), projectName: project.get('Name'), cost: cost});
+                }
             });
         } else {
             empty_text = "Error(s) fetching Project data: <br/>" + operation.error.errors.join('<br/>');
@@ -67,22 +70,77 @@ Ext.define('PortfolioItemCostTracking.CostPerProjectSettings',{
             autoWidth: true,
             renderTo: this.inputEl,
             columnCfgs: this._getColumnCfgs(),
-            showRowActionsColumn: false,
+           // showRowActionsColumn: false,
             showPagingToolbar: false,
             store: custom_store,
             maxHeight: 300,
+            margin: '20 0 0 0',
             emptyText: empty_text,
             editingConfig: {
                 publishMessages: false
             }
         });
 
+        var width = this.inputEl.getWidth(true);
+
+        Ext.create('Rally.ui.Button',{
+            text: 'Select Projects',
+            renderTo: this.inputEl,
+            margin: '10 0 0 0',
+            listeners: {
+                scope: this,
+                click: function(){
+
+                    Ext.create('ProjectPickerDialog',{
+                        autoShow: true,
+                        maxHeight: 400,
+                        width: width,
+                        title: 'Choose Project',
+                        selectedRefs: _.pluck(data, 'projectRef'),
+                        listeners: {
+                            scope: this,
+                            itemschosen: function(items){
+                                var new_data = [],
+                                    store = this._grid.getStore();
+
+                                _.each(items, function(item){
+                                    if (!store.findRecord('projectRef',item.get('_ref'))){
+                                        new_data.push({
+                                            projectRef: item.get('_ref'),
+                                            projectName: item.get('Name'),
+                                            cost: null
+                                        });
+                                    }
+                                });
+                                this._grid.getStore().add(new_data);
+                            }
+                        }
+                    });
+                }
+            }
+        });
+
        this.fireEvent('ready', true);
     },
+    _removeProject: function(){
+        this.grid.getStore().remove(this.record);
+    },
     _getColumnCfgs: function() {
+        var me = this;
 
-        var columns = [
-            {
+        var columns = [{
+            xtype: 'rallyrowactioncolumn',
+            scope: this,
+            rowActionsFn: function(record){
+                return  [
+                    {text: 'Remove', record: record, handler: me._removeProject, grid: me._grid }
+                ];
+            },
+            //Need to override this since we are using a custom store
+            _renderGearIcon: function(value, metaData, record) {
+                return '<div class="row-action-icon icon-gear"/>';
+            }
+        },{
                 text: 'Project',
                 dataIndex: 'projectRef',
                 flex: 1,
@@ -93,19 +151,19 @@ Ext.define('PortfolioItemCostTracking.CostPerProjectSettings',{
                 getSortParam: function(v,m,r){
                     return 'projectName';
                 }
-            },{
-                text: 'Cost Per Unit',
-                dataIndex: 'cost',
-                editor: {
-                    xtype: 'rallynumberfield'
-                },
-                renderer: function(v){
-                    if (v && v > 0){
-                        return v;
-                    }
-                    return "Use Default";
+        },{
+            text: 'Cost Per Unit',
+            dataIndex: 'cost',
+            editor: {
+                xtype: 'rallynumberfield'
+            },
+            renderer: function(v){
+                if (v && v > 0){
+                    return v;
                 }
-            }];
+                return "Use Default";
+            }
+        }];
         return columns;
     },
     /**

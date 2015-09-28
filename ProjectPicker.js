@@ -46,7 +46,7 @@ Ext.define('ProjectPickerDialog', {
         columns: [
             {
                 text: 'ID',
-                dataIndex: 'FormattedID',
+                dataIndex: 'ObjectID',
                 renderer: _.identity
             },
             'Name'
@@ -147,7 +147,7 @@ Ext.define('ProjectPickerDialog', {
                     disabled: true,
                     userAction: 'clicked done in dialog',
                     handler: function() {
-                        this.fireEvent('itemschosen', this, this.getSelectedRecords());
+                        this.fireEvent('itemschosen', this.getSelectedRecords());
                         this.close();
                     }
                 },
@@ -203,7 +203,6 @@ Ext.define('ProjectPickerDialog', {
                 itemId: 'searchTerms',
                 listeners: {
                     keyup: function (textField, event) {
-                        console.log('keyup', textField, event.getKey());
                         if (event.getKey() === Ext.EventObject.ENTER) {
                             this._search();
                         }
@@ -225,12 +224,47 @@ Ext.define('ProjectPickerDialog', {
         if (this.grid) {
             this.grid.destroy();
         }
-
-        this.fetchProjectTreeStore().then({
+        Ext.create('Rally.data.wsapi.ProjectTreeStoreBuilder').build({
+            models: ['project'],
+            autoLoad: true,
+            enableHierarchy: true,
+            filters: [{
+                property: 'Parent',
+                value: ""
+            }]
+        }).then({
             scope: this,
-            success: function(projectTree){
-                this.projectTree = projectTree;
-                this._addGrid(projectTree);
+            success: function(store) {
+                this.grid = this.add({
+                    xtype: 'rallytreegrid',
+                    treeColumnDataIndex: 'Name',
+                    treeColumnHeader: 'Name',
+                    enableRanking: false,
+                    // enableEditing: false,
+                    enableBulkEdit: false,
+                    shouldShowRowActionsColumn: false,
+                    selType: 'checkboxmodel',
+                    selModel: {
+                        //checkOnly: true,
+                        injectCheckbox: 0,
+                        mode: 'MULTI'
+                    },
+                    _defaultTreeColumnRenderer: function (value, metaData, record, rowIdx, colIdx, store) {
+                        store = store.treeStore || store;
+                        return Rally.ui.renderer.RendererFactory.getRenderTemplate(store.model.getField('Name')).apply(record.data);
+                    },
+                    columnCfgs: [],
+                    store: store
+                });
+
+                this.mon(this.grid, {
+                    beforeselect: this._onGridSelect,
+                    beforedeselect: this._onGridDeselect,
+                    load: this._onGridLoad,
+                    scope: this
+                });
+                this.add(this.grid);
+                this._onGridReady();
             }
         });
     },
@@ -246,15 +280,13 @@ Ext.define('ProjectPickerDialog', {
     },
 
     _onGridSelect: function(selectionModel, record) {
-
         var index = this._findRecordInSelectionCache(record);
-        console.log('onGridSelect', record, index);
+
         if (index === -1) {
             if (!this.multiple) {
                 this.selectionCache = [];
             }
             this.selectionCache.push(record);
-            console.log('selectionCache', this.selectionCache);
         }
 
         this._enableDoneButton();
@@ -265,7 +297,6 @@ Ext.define('ProjectPickerDialog', {
         if (index !== -1) {
             this.selectionCache.splice(index, 1);
         }
-
         this._enableDoneButton();
     },
 
@@ -284,177 +315,160 @@ Ext.define('ProjectPickerDialog', {
         this.center();
     },
     _onGridLoad: function() {
-        var defaultSelection = Ext.Array.from(this.selectedRef || this.selectedRecords);
-        if (defaultSelection.length) {
-            var selectedRecords = _.compact(_.map(defaultSelection, function(ref) {
-                var recordIndex = this.grid.getStore().find('_ref', ref);
-                return recordIndex >= 0 ? this.grid.getStore().getAt(recordIndex) : null;
-            }, this));
-            if(selectedRecords.length) {
-                this.grid.getSelectionModel().select(selectedRecords);
+        //console.log('_onGridLoad');
+        var store = this.grid.store;
+        var records = [];
+        _.each(this.selectionCache, function(record) {
+            var foundNode = store.getRootNode().findChild('_ref', record.get('_ref'),true);
+
+            if (foundNode) {
+                records.push(foundNode);
             }
-        } else {
-            var store = this.grid.store;
-            var records = [];
-
-            _.each(this.selectionCache, function(record) {
-                var recordIndex = store.find('_ref', record.get('_ref'));
-
-                if (recordIndex !== -1) {
-                    var storeRecord = store.getAt(recordIndex);
-                    records.push(storeRecord);
-                }
-            });
-
-            if (records.length) {
-                this.grid.getSelectionModel().select(records);
-            }
+        });
+        if (records.length) {
+            this.grid.getSelectionModel().select(records);
         }
     },
-
     _search: function() {
         var terms = this._getSearchTerms();
         var store = this.grid.getStore();
-        console.log('_search', terms, store);
+        //Filter functions call store load so we don't need to refresh the selections becuaes the
+        //onGridLoad function will
         if (terms) {
-            store.filter(function(item){
-                console.log('filter', item);
-                var re = new RegExp(terms, "i");
-                if (re.test(item.get('Name'))){
-                    return true;
-                }
-                return false;
-            }, true);
-            //Ext.Object.each(store.tree.nodeHash, function(key, node) {
-            //
-            //    console.log('node',node);
-            //    if (!re.test(node.get('Name'))){
-            //        node.remove();
-            //    }
-            //});
+            store.filter([
+                Ext.create('Rally.data.wsapi.Filter',{
+                    property: 'Name',
+                    operator: 'contains',
+                    value: terms
+                })
+            ]);
         } else {
-            store.tree.filter(function(item){
-                return true;
-            }, true);
-            //this._addGrid(this.projectTree);
+            store.clearFilter();
         }
-    },
 
+    },
     _getSearchTerms: function() {
         var textBox = this.down('#searchTerms');
         return textBox && textBox.getValue();
-    },
-    _getTreeArray:function(records) {
-
-        var projectHash = {};
-        _.each(records, function(rec){
-            projectHash[rec.get('ObjectID')] = rec.getData();
-            projectHash[rec.get('ObjectID')].leaf = true;
-            projectHash[rec.get('ObjectID')].text = rec.get('Name');
-            projectHash[rec.get('ObjectID')].children = [];
-            projectHash[rec.get('ObjectID')]._ref = rec.get('_ref');
-        });
-
-        var root_array = [];
-
-        Ext.Object.each(projectHash, function(oid,item){
-            var direct_parent = item.Parent;
-            if (!direct_parent && !Ext.Array.contains(root_array,item)) {
-                root_array.push(item);
-            } else {
-
-                var parent_oid =  direct_parent.ObjectID;
-                if (!projectHash[parent_oid]) {
-                    if ( !Ext.Array.contains(root_array,item) ) {
-                        root_array.push(item);
-                    }
-                } else {
-                    var parent = projectHash[parent_oid];
-
-                    var kids = parent.children;
-                    kids.push(item);
-                    parent.children = kids;
-                    parent.leaf = false;
-                }
-            }
-        },this);
-
-        return root_array;
-    },
-
-    fetchProjectTreeStore: function(){
-        var deferred = Ext.create('Deft.Deferred');
-
-        var fetch = ['ObjectID','Name','Parent'];
-
-        var store = Ext.create('Rally.data.wsapi.Store',{
-            model: 'Project',
-            fetch: fetch,
-            remoteFilter: false
-        });
-
-        store.load({
-            scope: this,
-            callback: function(records, operation, success){
-                if (success){
-                    var projectTree = this._getTreeArray(records);
-                    deferred.resolve(projectTree);
-                } else {
-                    deferred.resolve('Error fetching projects: ' + operation.error.errors.join(','));
-                }
-            }
-        });
-        return deferred;
-    },
-    _addGrid: function(projectTree){
-
-        Ext.define('ProjectTreeModel',{
-            extend: 'Ext.data.Model',
-            fields: [
-                { name: 'Name', type:'String' },
-                { name: '_ref', type:'String' }
-            ]
-        });
-
-        var tree_store = Ext.create('Ext.data.TreeStore', {
-            model: ProjectTreeModel,
-            root: {
-                expanded: true,
-                children: projectTree
-            }
-        });
-
-        if (this.grid){
-            this.grid.destroy();
-        }
-
-        this.grid = Ext.create('Ext.tree.Panel', {
-            columnCfgs: [
-                'Name'
-            ],
-            displayField: 'Name',
-            store: tree_store,
-            cls: 'rally-grid',
-            rootVisible: false,
-            selModel: Ext.create('Rally.ui.selection.CheckboxModel', {
-                mode: 'SIMPLE',
-                allowDeselect: true,
-                enableKeyNav: false
-            }),
-            viewConfig: {
-                emptyText: Rally.ui.EmptyTextFactory.get('defaultText'),
-                publishLoadMessages: false
-            }
-        });
-        this.grid.addCls('rally-grid-cell-no-wrap');
-        this.mon(this.grid, {
-            beforeselect: this._onGridSelect,
-            beforedeselect: this._onGridDeselect,
-            load: this._onGridLoad,
-            scope: this
-        });
-        this.add(this.grid);
-        this._onGridReady();
     }
 });
 
+Ext.override(Rally.data.wsapi.ParentChildMapper, {
+    constructor: function() {
+        this.parentChildTypeMap = {
+            project: [{
+                typePath: 'project', collectionName: 'Children', parentField: 'Parent'
+            }],
+            hierarchicalrequirement: [
+                {typePath: 'defect', collectionName: 'Defects', parentField: 'Requirement'},
+                {typePath: 'task', collectionName: 'Tasks', parentField: 'WorkProduct'},
+                {typePath: 'testcase', collectionName: 'TestCases', parentField: 'WorkProduct'},
+                {typePath: 'hierarchicalrequirement', collectionName: 'Children', parentField: 'Parent'}
+            ],
+            defect: [
+                {typePath: 'task', collectionName: 'Tasks', parentField: 'WorkProduct'},
+                {typePath: 'testcase', collectionName: 'TestCases', parentField: 'WorkProduct'}
+            ],
+            defectsuite: [
+                {typePath: 'defect', collectionName: 'Defects', parentField: 'DefectSuites'},
+                {typePath: 'task', collectionName: 'Tasks', parentField: 'WorkProduct'},
+                {typePath: 'testcase', collectionName: 'TestCases', parentField: 'WorkProduct'}
+            ],
+            testset: [
+                {typePath: 'task', collectionName: 'Tasks', parentField: 'WorkProduct'},
+                {typePath: 'testcase', collectionName: 'TestCases', parentField: 'TestSets'}
+            ]
+        };
+    }
+});
+
+
+Ext.define('Rally.data.wsapi.ProjectTreeStore', {
+
+    // Client Metrics Note: WsapiTreeStore is too low level to record its load begins/ends. The problem is
+    // client metrics can only reliably keep track of one load per component at a time. WsapiTreeStore makes
+    // no guarantee that only one load will happen at a time. It's better to measure the component that is using
+    // the store. All is not lost, the actual data requests that WsapiTreeStore makes *are* measured by client metrics.
+
+    requires: [
+        'Deft.promise.Deferred',
+        'Rally.data.ModelFactory',
+        'Rally.ui.grid.data.NodeInterface',
+        'Rally.data.ModelTypes',
+        'Rally.data.wsapi.ParentChildMapper'
+    ],
+    extend: 'Rally.data.wsapi.TreeStore',
+    alias: 'store.rallyprojectwsapitreestore',
+
+    /**
+     * The type definition typePaths to render as root items (required)
+     * @cfg {String[]} parentTypes
+     */
+    parentTypes: ['project'],
+
+    /**
+     * @property
+     * @private
+     */
+    childLevelSorters: [{
+        property: 'Name',
+        direction: 'ASC'
+    }],
+
+    getParentFieldNamesByChildType: function(childType, parentType) {
+        var model = this.model; //.getArtifactComponentModel(childType);
+        return _.transform(this.mapper.getParentFields(childType, parentType), function(acc, field) {
+            var typePath = field.typePath,
+                fieldName = field.fieldName,
+            // hasFieldModel = this.model.getArtifactComponentModel(typePath) || model.hasField(fieldName);
+                hasFieldModel = model.hasField(fieldName);
+
+            if (hasFieldModel) {
+                acc.push(fieldName.replace(/\s+/g, ''));
+            }
+        }, [], this);
+    },
+
+    filter: function(filters) {
+        this.fireEvent('beforefilter', this);
+        //We need to clear the filters to remove the Parent filter
+        this.filters.clear();
+        this.filters.addAll(filters);
+        this._resetCurrentPage();
+        this.load();
+    },
+
+    clearFilter: function(suppressEvent) {
+        this._resetCurrentPage();
+        this.filters.clear();
+        //We need to add the parent filter back in
+        this.filters.addAll(Ext.create('Rally.data.wsapi.Filter',{
+            property: 'Parent',
+            value: ''
+        }));
+
+        if (!suppressEvent) {
+            this.load();
+        }
+    }
+});
+
+Ext.define('Rally.data.wsapi.ProjectTreeStoreBuilder', {
+    extend: 'Rally.data.wsapi.TreeStoreBuilder',
+
+    build: function(config) {
+        //A context needs to be passed in here, and it NEEDS to be a DataContext (context.getDataContext())
+        //otherwise you will get a bunch of garbage on your WSAPI request
+
+        config = _.clone(config || {});
+        config.storeType = 'Rally.data.wsapi.ProjectTreeStore';
+
+        return this.loadModels(config).then({
+            success: function(models) {
+                models = _.values(models);
+                return this._buildStoreWithModels(models, config);
+            },
+            scope: this
+        });
+    }
+});

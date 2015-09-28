@@ -39,7 +39,6 @@ Ext.define('PortfolioItemCostTracking', {
             scope: this,
             success: function(results){
                 this.portfolioItemTypes = results[0];
-
                 this._initializeSettings(this.getSettings(), results[1]);
                 this._initializeUI();
             },
@@ -51,11 +50,13 @@ Ext.define('PortfolioItemCostTracking', {
     _initializeSettings: function(settings, doneScheduleStates){
 
 
-        PortfolioItemCostTracking.CostCalculator.notAvailableText = "N/A";
+        PortfolioItemCostTracking.CostCalculator.notAvailableText = "--";
         PortfolioItemCostTracking.CostCalculator.currencySign = settings.currencySign;
         PortfolioItemCostTracking.CostCalculator.currencyPrecision = 0;
         PortfolioItemCostTracking.CostCalculator.currencyEnd = false;
-        PortfolioItemCostTracking.CostCalculator.completedScheduleStates = doneScheduleStates;
+        if (doneScheduleStates){
+            PortfolioItemCostTracking.CostCalculator.completedScheduleStates = doneScheduleStates;
+        }
 
         PortfolioItemCostTracking.CostCalculator.normalizedCostPerUnit = settings.normalizedCostPerUnit;
 
@@ -64,6 +65,7 @@ Ext.define('PortfolioItemCostTracking', {
             project_cpu = Ext.JSON.decode(project_cpu);
         }
         PortfolioItemCostTracking.CostCalculator.projectCostPerUnit = project_cpu;
+        console.log('projectCostPerUnit', project_cpu, 'completedScheduleStates', doneScheduleStates);
 
         PortfolioItemCostTracking.CostCalculator.calculationType = settings.calculationType || 'points';
     },
@@ -121,13 +123,13 @@ Ext.define('PortfolioItemCostTracking', {
             }
         });
 
-        //header.add({
-        //    xtype: 'rallybutton',
-        //    cls: 'rly-small secondary',
-        //    iconCls: 'icon-export',
-        //    iconOnly: true,
-        //    margin: this.defaults.margin
-        //});
+        header.add({
+            xtype: 'rallybutton',
+            cls: 'rly-small secondary',
+            iconCls: 'icon-export',
+            iconOnly: true,
+            margin: this.defaults.margin
+        });
     },
     _getCmpValue: function(scope, item_id){
         var cmp = scope.down(item_id) || null;
@@ -139,7 +141,7 @@ Ext.define('PortfolioItemCostTracking', {
     _getModel: function(){
         var cmp = this.down('#cb-type') || null;
         if (cmp){
-            return cmp.getRecord().get('TypePath');
+            return cmp.getRecord().get('TypePath').toLowerCase();
         }
         return null;
     },
@@ -197,7 +199,6 @@ Ext.define('PortfolioItemCostTracking', {
             autoLoad: true,
             fetch: ['FormattedID','Name','Project','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children'],
             enableHierarchy: true,
-            pageSize: 2,
             listeners: {
                 scope: me,
                 load: me._setRollupData
@@ -216,30 +217,16 @@ Ext.define('PortfolioItemCostTracking', {
             cmp.resumeEvents();
         });
     },
-    _getStoryFetch: function(){
-        var fetch = ['ObjectID','Project','ScheduleState','PortfolioItem'];
-        if (PortfolioItemCostTracking.CostCalculator.calculationType === 'points'){
-            fetch.push('PlanEstimate');
-        }
-        if (PortfolioItemCostTracking.CostCalculator.calculationType === 'taskHours'){
-            fetch = fetch.concat(['TaskEstimateTotal','TaskActualTotal','TaskRemainingTotal']);
-        }
-        return fetch;
-
-    },
     _setRollupData: function(store, node, records, success){
         console.log('app.js _setRollupData', store, node, records, success);
         var rollup_data = this.rollupData;
         if (!rollup_data) {
             this.rollupData = Ext.create('PortfolioItemCostTracking.RollupData',{
-                storyFetch: this._getStoryFetch(),
                 portfolioItemTypes: this.portfolioItemTypes,
                 listeners: {
                     scope: this,
                     dataUpdated: function(record){
                         console.log('dataChanged', this.rollupData.data, this.down('rallytreegrid').getStore());
-                        //this.down('rallytreegrid').getStore().sync();
-                        //this.down('rallytreegrid').getView().refresh();
                     }
                 }
             });
@@ -251,6 +238,7 @@ Ext.define('PortfolioItemCostTracking', {
         }, this);
     },
     _updateDisplay: function(store){
+
         this.getBody().add({
             xtype: 'rallytreegrid',
             columnCfgs: this._getColumnCfgs(),
@@ -268,21 +256,28 @@ Ext.define('PortfolioItemCostTracking', {
             text: 'Project',
             editor: false
         },{
+            dataIndex: 'PercentDoneByStoryPlanEstimate',
+            text: '% Done by Story Points'
+        },{
             dataIndex: 'PreliminaryEstimate',
             text: 'Preliminary Budget',
             align: 'right',
             editor: false,
             renderer: PortfolioItemCostTracking.CostCalculator.preliminaryBudgetRenderer
-        }, {
-            dataIndex: 'PercentDoneByStoryPlanEstimate',
-            text: '% Done by Story Points'
         },{
-            dataIndex: "ObjectID",
-            text: "Actual Cost",
+            dataIndex: "FormattedID",
+            text: "Total Projected",
+            align: 'right',
+            renderer: PortfolioItemCostTracking.CostCalculator.totalCostRenderer
+        },{
+            dataIndex: "FormattedID",
+            text: "Actual Cost To Date",
+            align: 'right',
             renderer: PortfolioItemCostTracking.CostCalculator.actualCostRenderer
         },{
-            dataIndex: "ObjectID",
+            dataIndex: "FormattedID",
             text: "Remaining Cost",
+            align: 'right',
             renderer: PortfolioItemCostTracking.CostCalculator.costRemainingRenderer
         }];
     },

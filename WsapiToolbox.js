@@ -20,13 +20,14 @@ Ext.define('PortfolioItemCostTracking.WsapiToolbox', {
         });
         return deferred;
     },
-    fetchWsapiRecords: function(model, query_filters, fetch_fields){
+    fetchWsapiRecords: function(model, query_filters, fetch_fields, context){
         var deferred = Ext.create('Deft.Deferred');
 
         var store = Ext.create('Rally.data.wsapi.Store',{
             model: model,
             fetch: fetch_fields,
             filters: query_filters,
+            context: context,
             limit: Infinity
         }).load({
             callback: function(records, operation, success){

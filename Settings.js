@@ -11,6 +11,7 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         var currency_store = Ext.create('Rally.data.custom.Store', {
             data: this.currencyData
         });
+        var labelWidth = 100;
 
         return [{
             xtype: 'rallycombobox',
@@ -19,16 +20,14 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             displayField: 'name',
             valueField: 'value',
             fieldLabel:  'Currency',
-            labelAlign: 'top',
-            labelCls: 'lbl',
+            labelWidth: labelWidth,
             margin: '10 0 10 0'
         },{
             xtype: 'radiogroup',
             fieldLabel: 'Calculate Cost',
-            labelAlign: "top",
-            labelCls: 'lbl',
             columns: 1,
             vertical: true,
+            labelWidth: labelWidth,
             margin: '10 0 10 0',
             items: [
                 { boxLabel: 'Based on Story Points', name: 'calculationType',inputValue: 'points', checked: true },
@@ -39,16 +38,14 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             xtype: 'rallytextfield',
             name: 'normalizedCostPerUnit',
             fieldLabel: 'Normalized Cost Per Unit',
-            labelAlign: 'top',
-            labelCls: 'lbl',
-            width: 175,
+            labelWidth: labelWidth,
+            width: 200,
             margin: '25 0 0 0'
         },{
             xtype: 'costperprojectsettings',
             name: 'projectCostPerUnit',
-            fieldLabel: 'Cost Per Unit by Team',
+            fieldLabel: 'Optionally define costs per unit for individual teams (exceptions to the normalized cost)',
             labelAlign: 'top',
-            labelCls: 'lbl',
             margin: '25 0 0 0',
             readyEvent: 'ready'
         }];

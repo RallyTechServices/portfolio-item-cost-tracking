@@ -6,6 +6,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
     preliminaryBudget: null,
     actualCost: 0,
     remainingCost: 0,
+    totalCost: 0,
     tooltip: undefined,
     /**
      * data is from the record associated with the rollup data
@@ -23,8 +24,18 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
         if (this.type.toLowerCase() === 'hierarchicalrequirement' ){
             this.actualCost = PortfolioItemCostTracking.CostCalculator.calculateActualCostForStory(this.data);
             this.remainingCost = PortfolioItemCostTracking.CostCalculator.calculateTotalCostForStory(this.data) - this.actualCost;
+            this.totalCost = PortfolioItemCostTracking.CostCalculator.calculateTotalCostForStory(this.data);
         }
 
+        if (this.type.toLowerCase() === 'task'){
+            this.actualCost = PortfolioItemCostTracking.CostCalculator.calculateActualCostForTask(this.data);
+            this.totalCost = PortfolioItemCostTracking.CostCalculator.calculateTotalCostForTask(this.data);
+            if (this.actualCost === null || this.totalCost === null) {
+                this.remainingCost = null;
+            } else {
+                this.remainingCost = this.totalCost - this.actualCost;
+            }
+        }
     },
     addChild: function(child){
         if (!this.children){
@@ -33,6 +44,12 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
         this.children.push(child);
     },
     calculateRollupFromChildren: function(){
+
+        var noRollups = ['task','hierarchicalrequirement'];
+        if (Ext.Array.contains(noRollups, this.type.toLowerCase())){
+            return;
+        }
+
         var actual_value = 0,
             total_value = 0;
 
@@ -41,25 +58,8 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
             actual_value += PortfolioItemCostTracking.CostCalculator.calculateActualCostForStory(s);
         }, this);
 
+        this.totalCost = total_value;
         this.actualCost = actual_value;
         this.remainingCost = total_value - actual_value;
-    },
-    taskHours: function(){
-        var actual_value = 0,
-            total_value = 0,
-            remaining_value = 0;
-
-        _.each(this.children, function(s){
-            total_value += s.TaskEstimateTotal * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(s.Project._ref);
-            actual_value += s.TaskActualTotal * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(s.Project._ref);
-            remaining_value = s.TaskRemainingTotal * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(s.Project._ref);
-        }, this);
-
-        this.actualCost = actual_value;
-        this.remainingCost = total_value - actual_value;
-    },
-    timesheets: function(){
-        this.actualCost = 1;
-        this.remainingCost = 1;
     }
 });
