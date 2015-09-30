@@ -61,5 +61,6 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
         this.totalCost = total_value;
         this.actualCost = actual_value;
         this.remainingCost = total_value - actual_value;
+        this.tooltip = 'wheeeee!';
     }
 });

@@ -8,3 +8,7 @@
      font-family: ProximaNovaSemiBold, Helvetica, Arial;
      font-size: 10px;
 }
+
+.x-form-trigger-wrap {
+     margin-top: 0px!important;
+}

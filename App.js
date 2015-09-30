@@ -3,22 +3,10 @@ Ext.define('PortfolioItemCostTracking', {
     componentCls: 'app',
 
     defaults: {
-        margin: 10,
         startDate: new Date('2015-01-01'),
         endDate: new Date('2015-12-31'),
         groupByRelease: false
     },
-
-    items: [{
-        xtype: 'container',
-        cls: 'header',
-        layout: {
-            type: 'hbox'
-        }
-    },{
-        xtype: 'container',
-        cls: 'body'
-    }],
 
     config: {
         defaultSettings: {
@@ -29,26 +17,99 @@ Ext.define('PortfolioItemCostTracking', {
         }
     },
 
+    items: [],
+
     portfolioItemRollupData: {},
 
     launch: function() {
-        Deft.Promise.all([
+
+        //ToDO: check for RPM?
+
+        //Initialize the filter values...
+        var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
+            state_val = state ? state.value : null;
+
+
+       Deft.Promise.all([
             PortfolioItemCostTracking.WsapiToolbox.fetchPortfolioItemTypes(),
-            PortfolioItemCostTracking.WsapiToolbox.fetchDoneStates()
+            PortfolioItemCostTracking.WsapiToolbox.fetchDoneStates(),
+            PortfolioItemCostTracking.WsapiToolbox.fetchModelTypePathByTypeDefinition(state_val)
         ]).then({
             scope: this,
             success: function(results){
                 this.portfolioItemTypes = results[0];
                 this._initializeSettings(this.getSettings(), results[1]);
-                this._initializeUI();
+                this._createPickers();
             },
             failure: function(msg){
                 Rally.ui.notify.Notifier.showError({message: msg});
             }
         });
     },
-    _initializeSettings: function(settings, doneScheduleStates){
+    _createPickers: function(){
 
+        this.fixedHeader = Ext.create('Ext.container.Container',{
+            itemId: 'header-controls',
+            width: 460,
+            layout: 'hbox',
+            margin: '0 20 0 0',
+            padding: '0 0 0 20',
+            items: [{
+                xtype: 'rallydatefield',
+                itemId: 'dt-start',
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('dt-start'),
+                stateEvents: ['change'],
+                margin: '0 10 0 0',
+                fieldLabel: 'Start Date',
+                labelSeparator: '',
+                labelCls: 'lbl',
+                labelAlign: 'top',
+                listeners: {
+                    scope: this,
+                    change: this.updateStoreFilters
+                }
+            },{
+                xtype: 'rallydatefield',
+                itemId: 'dt-end',
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('dt-end'),
+                stateEvents: ['change'],
+                margin: '0 10 0 0',
+                labelSeparator: '',
+                labelCls: 'lbl',
+                fieldLabel: 'End Date',
+                labelAlign: 'top',
+                listeners: {
+                    scope: this,
+                    change: this.updateStoreFilters
+                }
+            },{
+                xtype: 'rallyportfolioitemtypecombobox',
+                itemId: 'cb-type',
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('cb-type'),
+                stateEvents: ['change'],
+                margin: '0 10 0 0',
+                fieldLabel: 'Portfolio Item Type',
+                labelAlign: 'top',
+                labelCls: 'lbl',
+                listeners: {
+                    scope: this,
+                    ready: function (picker) {
+                        console.log('ready');
+                    }
+                }
+            }]
+        });
+        this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
+    },
+    _onTypeChange: function(piPicker){
+        var piType = piPicker.getRecord().get('TypePath');
+        this.modelNames = [piType];
+        this._initializeGrid(this.modelNames);
+    },
+    _initializeSettings: function(settings, doneScheduleStates){
 
         PortfolioItemCostTracking.CostCalculator.notAvailableText = "--";
         PortfolioItemCostTracking.CostCalculator.currencySign = settings.currencySign;
@@ -65,87 +126,85 @@ Ext.define('PortfolioItemCostTracking', {
             project_cpu = Ext.JSON.decode(project_cpu);
         }
         PortfolioItemCostTracking.CostCalculator.projectCostPerUnit = project_cpu;
-        console.log('projectCostPerUnit', project_cpu, 'completedScheduleStates', doneScheduleStates);
 
         PortfolioItemCostTracking.CostCalculator.calculationType = settings.calculationType || 'points';
     },
-    _initializeUI: function(){
-        var header = this.down('container[cls=header]');
-        header.removeAll();
 
-        header.add({
-            xtype: 'rallydatefield',
-            itemId: 'dt-start',
-            stateful: true,
-            stateId: this.getContext().getScopedStateId('dt-start'),
-            stateEvents: ['change'],
-            value: this.defaults.startDate,
-            margin: this.defaults.margin,
-            fieldLabel: 'Start Date',
-            labelSeparator: '',
-            labelAlign: 'top',
-            listeners: {
-                scope: this,
-                change: this.refreshData
-            }
-        });
+     _initializeGrid: function(modelNames){
+        var me = this;
 
-        header.add({
-            xtype: 'rallydatefield',
-            itemId: 'dt-end',
-            stateful: true,
-            stateId: this.getContext().getScopedStateId('dt-end'),
-            stateEvents: ['change'],
-            value: this.defaults.endDate,
-            margin: this.defaults.margin,
-            labelSeparator: '',
-            fieldLabel: 'End Date',
-            labelAlign: 'top',
-            listeners: {
-                scope: this,
-                change: this.refreshData
-            }
-        });
-
-        header.add({
-            xtype: 'rallyportfolioitemtypecombobox',
-            itemId: 'cb-type',
-            stateful: true,
-            stateId: this.getContext().getScopedStateId('cb-type'),
-            stateEvents: ['change'],
-            margin: this.defaults.margin,
-            fieldLabel: 'Portfolio Item Type',
-            labelAlign: 'top',
-            listeners: {
-                scope: this,
-                change: this.refreshData,
-                ready: this.refreshData
-            }
-        });
-
-        header.add({
-            xtype: 'rallybutton',
-            cls: 'rly-small secondary',
-            iconCls: 'icon-export',
-            iconOnly: true,
-            margin: this.defaults.margin
-        });
-    },
-    _getCmpValue: function(scope, item_id){
-        var cmp = scope.down(item_id) || null;
-        if (cmp){
-            return cmp.getValue() || null;
+        if (this.rollupData){
+            this.rollupData.clearRollupData();
         }
-        return null;
-    },
-    _getModel: function(){
-        var cmp = this.down('#cb-type') || null;
-        if (cmp){
-            return cmp.getRecord().get('TypePath').toLowerCase();
+
+        if (this.down('treegridcontainer')){
+            if (this.fixedHeader && this.fixedHeader.rendered) {
+                var parent = this.fixedHeader.up();
+                if(parent && parent.remove){
+                    parent.remove(this.fixedHeader, false);
+                }
+            }
+            this.down('treegridcontainer').destroy();
         }
-        return null;
+
+        var filters = this._getDateFilters();
+        console.log('filters', filters.toString());
+        Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
+            models: modelNames,
+            filters: filters,
+            fetch: ['FormattedID','Name','Project','PreliminaryEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
+            enableHierarchy: true,
+            listeners: {
+                scope: me,
+                load: me._setRollupData
+            }
+        }).then({
+            scope: this,
+            success: function(store) {
+                store.model.addField({persist: false, name: '_rollupDataPreliminaryBudget', type: 'auto', defaultValue: null, displayName: 'Preliminary Budget'});
+                store.model.addField({persist: false, name: '_rollupDataTotalCost', type: 'auto', defaultValue: null, displayName: 'Total Cost'});
+                store.model.addField({persist: false, name: '_rollupDataRemainingCost', type: 'auto', defaultValue: null, displayName: 'Remaining Cost'});
+                store.model.addField({persist: false, name: '_rollupDataActualCost', type: 'auto', defaultValue: null, displayName: 'Actual Cost'});
+                store.model.addField({persist: false, name: '_rollupDataToolTip', type: 'string', defaultValue: null});
+
+                this._updateDisplay(store, modelNames);
+            }
+        });
     },
-    _getDateFilters: function(start_date, end_date){
+    getStartDate: function(){
+        return this.getDate('dt-start',this.defaults.startDate);
+    },
+    getEndDate: function(){
+        return this.getDate('dt-end',this.defaults.endDate);
+    },
+    getDate: function(itemId, defaultDate){
+        var dt = defaultDate,
+            cmpId = '#' + itemId;
+
+        if (this.down(cmpId)){
+            dt = this.down(cmpId).getValue();
+        } else {
+            var state = Ext.state.Manager.get(this.getContext().getScopedStateId(itemId));
+            if (state && state.value){
+                dt = new Date(state.value);
+            }
+        }
+        return dt;
+    },
+    addHeader: function (gb) {
+        var header = gb.getHeader();
+
+        if (header) {
+            header.getLeft().add(this.fixedHeader);
+        }
+    },
+    _showExportMenu: function (button) {
+        console.log('export');
+    },
+    _getDateFilters: function(){
+
+        var start_date = this.getStartDate(),
+            end_date = this.getEndDate();
 
         var filter_actual = [{
             property: 'ActualEndDate',
@@ -174,61 +233,17 @@ Ext.define('PortfolioItemCostTracking', {
 
         return filter_actual.or(filter_planned);
     },
-    refreshData: function(cmp){
-        var start_date = this._getCmpValue(this, '#dt-start'),
-            end_date = this._getCmpValue(this, '#dt-end'),
-            model = this._getModel();
-
-        this.getBody().removeAll();
-
-        if (start_date === null || end_date === null || model === null){
-            this.getBody().add({
-                xtype: 'container',
-                html: 'Please select a Start Date, End Date and Portfolio Item Type.'
-            });
-            return;
+    updateStoreFilters: function(){
+        if (this.down('treegridcontainer')){
+            this.down('treegridcontainer').storeConfig.filters = this._getDateFilters();
+            this.down('treegridcontainer').applyCustomFilter(this.down('treegridcontainer').currentCustomFilter);
         }
-        cmp.suspendEvents(false);
-
-        var filters = this._getDateFilters(start_date, end_date),
-            me = this;
-
-        Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
-            models: [model],
-            filters: filters,
-            autoLoad: true,
-            fetch: ['FormattedID','Name','Project','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children'],
-            enableHierarchy: true,
-            listeners: {
-                scope: me,
-                load: me._setRollupData
-            }
-        }).then({
-            scope: this,
-            success: function(store) {
-                store.model.addField({name: '_rollupDataPreliminaryBudget', type: 'auto', defaultValue: null});
-                store.model.addField({name: '_rollupDataTotalCost', type: 'auto', defaultValue: null});
-                store.model.addField({name: '_rollupDataRemainingCost', type: 'auto', defaultValue: null});
-                store.model.addField({name: '_rollupDataToolTip', type: 'string', defaultValue: null});
-
-                this._updateDisplay(store);
-            }
-        }).always(function(){
-            cmp.resumeEvents();
-        });
     },
     _setRollupData: function(store, node, records, success){
-        console.log('app.js _setRollupData', store, node, records, success);
-        var rollup_data = this.rollupData;
+         var rollup_data = this.rollupData;
         if (!rollup_data) {
             this.rollupData = Ext.create('PortfolioItemCostTracking.RollupData',{
-                portfolioItemTypes: this.portfolioItemTypes,
-                listeners: {
-                    scope: this,
-                    dataUpdated: function(record){
-                        console.log('dataChanged', this.rollupData.data, this.down('rallytreegrid').getStore());
-                    }
-                }
+                portfolioItemTypes: this.portfolioItemTypes
             });
             rollup_data = this.rollupData;
         }
@@ -237,12 +252,65 @@ Ext.define('PortfolioItemCostTracking', {
             rollup_data.setRollupData(r);
         }, this);
     },
-    _updateDisplay: function(store){
+    _updateDisplay: function(store, modelNames){
+        var me = this;
 
-        this.getBody().add({
-            xtype: 'rallytreegrid',
-            columnCfgs: this._getColumnCfgs(),
-            store: store
+        this.add({
+            xtype: 'treegridcontainer',
+            context: this.getContext(),
+            storeConfig: {
+                filters: this._getDateFilters()
+            },
+            gridConfig: {
+                columnCfgs: this._getColumnCfgs(),
+                store: store,
+                stateId: this.getContext().getScopedStateId('cost-grid-test7'),
+                stateful: true
+            },
+            plugins:[{
+                ptype: 'treegridcontainercustomfiltercontrol',
+                filterControlConfig: {
+                    modelNames: modelNames,
+                    stateful: true,
+                    stateId: this.getContext().getScopedStateId('cost-grid-filter'),
+                    margin: '15px 10px 0px 0px'
+                },
+                showOwnerFilter: true,
+                ownerFilterControlConfig: {
+                    stateful: true,
+                    stateId: this.getContext().getScopedStateId('cost-grid-owner-filter'),
+                    margin: '15px 10px 0px 0px'
+                }
+            },{
+                ptype: 'treegridcontainerfieldpicker',
+                headerPosition: 'left',
+                modelNames: modelNames,
+                alwaysSelectedFields: ['_rollupDataPreliminaryBudget','_rollupDataTotalCost','_rollupDataRemainingCost','_rollupDataActualCost'],
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('cost-grid-field-picker'),
+                margin: '15px 0px 10px 10px'
+            },{
+                ptype: 'rallygridboardactionsmenu',
+                menuItems: [
+                    {
+                        text: 'Export...',
+                        handler: me._showExportMenu,
+                        scope: me
+                    }
+                ],
+                buttonConfig: {
+                    iconCls: 'icon-export',
+                    margin: '15px 10px 0px 0px'
+                }
+            }],
+            listeners: {
+                beforerender: function(gb){
+                    console.log('beforeRender');
+                    this.addHeader(gb);
+                },
+                scope: this
+            },
+            height: this.getHeight()
         });
     },
     _getColumnCfgs: function(){
@@ -254,44 +322,42 @@ Ext.define('PortfolioItemCostTracking', {
         },{
             dataIndex: 'Project',
             text: 'Project',
-            editor: false
+            editor: false,
+            isCellEditable: false
         },{
             dataIndex: 'PercentDoneByStoryPlanEstimate',
             text: '% Done by Story Points'
         },{
-            dataIndex: 'PreliminaryEstimate',
+            dataIndex: '_rollupDataPreliminaryBudget',
             text: 'Preliminary Budget',
             align: 'right',
-            editor: false,
-            renderer: PortfolioItemCostTracking.CostCalculator.preliminaryBudgetRenderer
-        },{
-            dataIndex: "FormattedID",
-            text: "Total Projected",
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataPreliminaryBudget'
+        }, {
+            dataIndex: '_rollupDataTotalCost',
+            text: 'Total Projected',
             align: 'right',
-            renderer: PortfolioItemCostTracking.CostCalculator.totalCostRenderer
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataTotalCost'
         },{
-            dataIndex: "FormattedID",
+            dataIndex: '_rollupDataActualCost',
             text: "Actual Cost To Date",
             align: 'right',
-            renderer: PortfolioItemCostTracking.CostCalculator.actualCostRenderer
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataActualCost'
         },{
-            dataIndex: "FormattedID",
+            dataIndex: '_rollupDataRemainingCost',
             text: "Remaining Cost",
             align: 'right',
-            renderer: PortfolioItemCostTracking.CostCalculator.costRemainingRenderer
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataRemainingCost'
         }];
-    },
-
-    getBody: function(){
-        return this.down('container[cls=body]');
     },
     getSettingsFields: function() {
         return PortfolioItemCostTracking.Settings.getFields();
     },
     onSettingsUpdate: function (settings){
-        //console.log('onSettingsUpdate', settings);
-        this.rollupData.clearRollupData();
         this._initializeSettings(settings);
-        this._initializeUI();
+        this._initializeGrid(this.modelNames);
     }
 });

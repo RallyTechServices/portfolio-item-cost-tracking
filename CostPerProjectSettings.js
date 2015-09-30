@@ -81,7 +81,7 @@ Ext.define('PortfolioItemCostTracking.CostPerProjectSettings',{
             }
         });
 
-        var width = this.inputEl.getWidth(true);
+        var width = Math.max(this.inputEl.getWidth(true),300);
 
         Ext.create('Rally.ui.Button',{
             text: 'Select Projects',
@@ -94,7 +94,8 @@ Ext.define('PortfolioItemCostTracking.CostPerProjectSettings',{
                     Ext.create('ProjectPickerDialog',{
                         autoShow: true,
                         maxHeight: 400,
-                        width: width,
+                        maxWidth: 400,
+                        width: Math.min(width, 400),
                         title: 'Choose Project',
                         selectedRefs: _.pluck(data, 'projectRef'),
                         listeners: {

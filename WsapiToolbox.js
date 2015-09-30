@@ -20,6 +20,31 @@ Ext.define('PortfolioItemCostTracking.WsapiToolbox', {
         });
         return deferred;
     },
+    fetchModelTypePathByTypeDefinition: function(typeDef){
+        var deferred = Ext.create('Deft.Deferred');
+        var typeDefId = 0;
+        if (typeDef){
+            typeDefId = typeDef.replace('/typedefinition/','');
+        }
+
+        var store = Ext.create('Rally.data.wsapi.Store',{
+            model: 'TypeDefinition',
+            fetch: ['TypePath','Name'],
+            filters: [{
+                property: 'ObjectID',
+                value: typeDefId
+            }]
+        }).load({
+            callback: function(records, operation, success){
+                if (success && records && records.length > 0){
+                    deferred.resolve(records[0].get('TypePath'));
+                } else {
+                    deferred.resolve(null); //(Ext.String.format("Error getting TypeDefinition for {1}: {0}", operation.error.errors.join(','), typeDef));
+                }
+            }
+        });
+        return deferred;
+    },
     fetchWsapiRecords: function(model, query_filters, fetch_fields, context){
         var deferred = Ext.create('Deft.Deferred');
 

@@ -91,12 +91,21 @@ Ext.define('PortfolioItemCostTracking.CostCalculator', {
         }
         return null;
     },
+    calculatePreliminaryBudget: function(data){
+        var pb = 0;
+        if (data && data.PreliminaryEstimate && data.PreliminaryEstimate.Value){
+            var cpu = PortfolioItemCostTracking.CostCalculator.getCostPerUnit(data.Project._ref);
+            pb = cpu * data.PreliminaryEstimate.Value;
+        }
+        return pb;
+    },
     formatCost: function(cost){
         return Ext.util.Format.currency(cost, this.currencySign, this.currencyPrecision, this.currencyEnd);
     },
+
     totalCostRenderer: function(value, metaData, record){
         var cr = PortfolioItemCostTracking.CostCalculator.notAvailableText;
-        if (record.get('_rollupDataTotalCost') != null && !isNaN(record.get('_rollupDataTotalCost'))){
+        if (record.get('_rollupDataTotalCost') !== null && !isNaN(record.get('_rollupDataTotalCost'))){
             return PortfolioItemCostTracking.CostCalculator.formatCost(record.get('_rollupDataTotalCost'));
         }
         return cr;
@@ -104,20 +113,22 @@ Ext.define('PortfolioItemCostTracking.CostCalculator', {
     },
     actualCostRenderer: function(value,metaData,record){
         var cr = PortfolioItemCostTracking.CostCalculator.notAvailableText;
-        if (record.get('_rollupDataActualCost') != null && !isNaN(record.get('_rollupDataActualCost'))){
+        if (record.get('_rollupDataActualCost') !== null && !isNaN(record.get('_rollupDataActualCost'))){
             return PortfolioItemCostTracking.CostCalculator.formatCost(record.get('_rollupDataActualCost'));
         }
         return cr;
     },
     costRemainingRenderer: function(value, metaData, record){
+        console.log('costRemainingRenderer', value, metaData, record);
+
         var cr = PortfolioItemCostTracking.CostCalculator.notAvailableText;
-        if (record.get('_rollupDataRemainingCost') != null  && !isNaN(record.get('_rollupDataRemainingCost'))){
+        if (record.get('_rollupDataRemainingCost') !== null  && !isNaN(record.get('_rollupDataRemainingCost'))){
             return PortfolioItemCostTracking.CostCalculator.formatCost(record.get('_rollupDataRemainingCost'));
         }
         return cr;
     },
     preliminaryBudgetRenderer: function(value,metaData,record){
-        var pb = PortfolioItemCostTracking.CostCalculator.notAvailableText;
+         var pb = PortfolioItemCostTracking.CostCalculator.notAvailableText;
         if (value && value.Value){
             var cpu = PortfolioItemCostTracking.CostCalculator.getCostPerUnit(record.get('Project')._ref);
             pb = PortfolioItemCostTracking.CostCalculator.formatCost(cpu * value.Value);

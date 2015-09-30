@@ -10,7 +10,7 @@ Ext.define('PortfolioItemCostTracking.RollupData',{
 
     constructor: function(config){
         this.portfolioItemTypes = _.map(config.portfolioItemTypes, function(p){return p.toLowerCase();});
-
+        console.log('pi types',this.portfolioItemTypes);
         this.mixins.observable.constructor.call(this, config);
         this.addEvents(
             'dataUpdated',
@@ -69,7 +69,7 @@ Ext.define('PortfolioItemCostTracking.RollupData',{
                 scope: this,
                 success: function(){
                     console.log('_buildRollupData._fetchChildPortfolioItems success', this.data);
-                    this._calculateRollupData(record);
+                    this._calculateRollupData(key);
                     this._setDataOnModel(record, this.data[key]);
                 },
                 failure: function(operation){
@@ -78,7 +78,7 @@ Ext.define('PortfolioItemCostTracking.RollupData',{
             });
         } else {
             console.log('_buildRollupData else', record);
-            this._calculateRollupData(record);
+            this._calculateRollupData(key);
             this._setDataOnModel(record, this.data[key]);
         }
     },
@@ -93,36 +93,45 @@ Ext.define('PortfolioItemCostTracking.RollupData',{
         var data = this.data[key] || null;
         console.log('_calculateRollupData key, data, this.data',key, data, this.data);
         if (data){
+            console.log('data', data.data.FormattedID);
             if (data.type.toLowerCase() === this.portfolioItemTypes[0].toLowerCase()){
                 data.calculateRollupFromChildren();
+                data.preliminaryBudget = PortfolioItemCostTracking.CostCalculator.calculatePreliminaryBudget(data.data);
             } else {
                 data.totalCost = 0;
                 data.actualCost = 0;
                 data.remainingCost = 0;
                 _.each(data.children, function(c){
-                    this._calculateRollupData(c[this.keyField]);
-                    data.totalCost += c.totalCost;
-                    data.actualCost += c.actualCost;
-                    data.remainingCost += c.remainingCost;
+                    var child_key = c[this.keyField];
+                    this._calculateRollupData(child_key);
+                    var child_data = this.data[child_key];
+                    data.totalCost += child_data.totalCost ;
+                    data.actualCost += child_data.actualCost;
+                    data.remainingCost += child_data.remainingCost;
+                    //console.log('---', data.totalCost, data.data.FormattedID,child_data);
                 }, this);
             }
         }
     },
 
     _setDataOnModel: function(record, data){
-        console.log('record set',record.get('FormattedID'), data);
-        record.set('_rollupDataPreliminaryBudget', data.preliminaryBudget || '--');
-
+        record.set('_rollupDataPreliminaryBudget', data.preliminaryBudget);
         record.set('_rollupDataTotalCost',data.totalCost);
         record.set('_rollupDataActualCost',data.actualCost);
         record.set('_rollupDataRemainingCost', data.remainingCost);
         record.set('_rollupDataToolTip', data.tooltip || null);
      },
     _getChildPortfolioModelType: function(portfolioItemType){
-        var idx = _.indexOf(this.portfolioItemTypes, portfolioItemType.toLowerCase());
-        console.log('__getChildPortfolioModelType', portfolioItemType, this.portfolioItemTypes, idx);
-        if (idx > 0){
-            return this.portfolioItemTypes[idx - 1];
+        var found = Ext.Array.filter(this.portfolioItemTypes, function(item){
+            return item.toLowerCase() === portfolioItemType.toLowerCase();
+        });
+
+
+        if (found && found.length > 0){
+            var idx = _.indexOf(this.portfolioItemTypes, found[0]);
+            if (idx > 0){
+                return this.portfolioItemTypes[idx-1].toLowerCase();
+            }
         }
         return null;
     },
@@ -136,6 +145,7 @@ Ext.define('PortfolioItemCostTracking.RollupData',{
             };
         });
         filters = Rally.data.wsapi.Filter.or(filters);
+        console.log('_fetchChildPortfolioItems',portfolioItemType, filters);
 
         return PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords(portfolioItemType,filters,portfolioItemFetch,{project: null}).then({
             scope: this,
@@ -176,7 +186,7 @@ Ext.define('PortfolioItemCostTracking.RollupData',{
         });
         filters = Rally.data.wsapi.Filter.or(filters);
         var storyFetch = PortfolioItemCostTracking.CostCalculator.getStoryFetch();
-        console.log('storyFetch',storyFetch);
+    //    console.log('storyFetch',storyFetch);
         PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords('HierarchicalRequirement',filters,storyFetch,{project: null}).then({
             scope: this,
             success: function(records){

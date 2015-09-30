@@ -11,7 +11,11 @@
       "CostPerProjectSettings.js",
       "PortfolioItemTree.js",
       "RollupDataItem.js",
-      "ProjectPicker.js"
+      "ProjectPicker.js",
+      "overrides.js",
+      "PluginTreeGridContainerCustomFilter.js",
+      "PluginTreeGridContainerFieldPicker.js",
+      "TreeGridContainer.js"
    ],
    "css": [
       "app.css"

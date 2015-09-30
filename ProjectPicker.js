@@ -1,10 +1,12 @@
+
+
 Ext.define('ProjectPickerDialog', {
     extend: 'Rally.ui.dialog.Dialog',
     alias: 'widget.projectpickerdialog',
 
 
     height: 400,
-    width: 600,
+    width: 400,
     layout: 'fit',
     closable: true,
     draggable: true,
@@ -235,20 +237,28 @@ Ext.define('ProjectPickerDialog', {
         }).then({
             scope: this,
             success: function(store) {
+
+                var mode = this.multiple ? 'MULTI' : 'SINGLE';
+
+                var checkbox_model = Ext.create('Rally.ui.selection.CheckboxModel', {
+                    mode: mode,
+                    enableKeyNav: false,
+                    allowDeselect: true
+                });
+
                 this.grid = this.add({
                     xtype: 'rallytreegrid',
                     treeColumnDataIndex: 'Name',
                     treeColumnHeader: 'Name',
+                    viewConfig: {
+                        cls: 'grid-view-bulk-edit'
+                    },
                     enableRanking: false,
-                    // enableEditing: false,
+                    enableEditing: false,
                     enableBulkEdit: false,
                     shouldShowRowActionsColumn: false,
-                    selType: 'checkboxmodel',
-                    selModel: {
-                        //checkOnly: true,
-                        injectCheckbox: 0,
-                        mode: 'MULTI'
-                    },
+
+                    selModel: checkbox_model,
                     _defaultTreeColumnRenderer: function (value, metaData, record, rowIdx, colIdx, store) {
                         store = store.treeStore || store;
                         return Rally.ui.renderer.RendererFactory.getRenderTemplate(store.model.getField('Name')).apply(record.data);
@@ -281,6 +291,8 @@ Ext.define('ProjectPickerDialog', {
 
     _onGridSelect: function(selectionModel, record) {
         var index = this._findRecordInSelectionCache(record);
+
+        console.log('selectionModel',selectionModel, record);
 
         if (index === -1) {
             if (!this.multiple) {
