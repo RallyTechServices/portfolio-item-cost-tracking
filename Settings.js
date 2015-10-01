@@ -2,7 +2,10 @@ Ext.define('PortfolioItemCostTracking.Settings', {
     singleton: true,
 
     currencyData: [
-        {name: "US Dollars", value: "$"}
+        {name: "US Dollars", value: "$"},
+        {name: "Euro", value: "&#128;"},
+        {name: "Japanese Yen", value: "&#165;"},
+        {name: "Brazilian Real", value: "R$"}
     ],
 
     getFields: function(config) {

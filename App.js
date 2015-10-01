@@ -275,25 +275,25 @@ Ext.define('PortfolioItemCostTracking', {
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
                 filterControlConfig: {
-                    modelNames: modelNames
+                    modelNames: modelNames,
                     //stateful: true,
                     //stateId: this.getContext().getScopedStateId('cost-grid-filter'),
-                    //margin: '15px 10px 0px 0px'
+                    margin: '15px 10px 0px 0px'
                 },
                 showOwnerFilter: true,
                 ownerFilterControlConfig: {
                     //stateful: true,
                     //stateId: this.getContext().getScopedStateId('cost-grid-owner-filter'),
-                    //margin: '15px 10px 0px 0px'
+                    margin: '15px 10px 0px 0px'
                 }
             },{
                 ptype: 'treegridcontainerfieldpicker',
                 headerPosition: 'left',
                 modelNames: modelNames,
-                alwaysSelectedFields: ['_rollupDataPreliminaryBudget','_rollupDataTotalCost','_rollupDataRemainingCost','_rollupDataActualCost']
+                alwaysSelectedFields: ['_rollupDataPreliminaryBudget','_rollupDataTotalCost','_rollupDataRemainingCost','_rollupDataActualCost'],
                 //stateful: true,
                 //stateId: this.getContext().getScopedStateId('cost-grid-field-picker'),
-                //margin: '15px 0px 10px 10px'
+                margin: '15px 0px 10px 10px'
             },{
                 ptype: 'rallygridboardactionsmenu',
                 menuItems: [
