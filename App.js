@@ -3,8 +3,8 @@ Ext.define('PortfolioItemCostTracking', {
     componentCls: 'app',
 
     defaults: {
-        startDate: new Date('2015-01-01'),
-        endDate: new Date('2015-12-31'),
+        startDate: new Date('2015-06-01'),
+        endDate: new Date('2016-05-31'),
         groupByRelease: false
     },
 
@@ -58,9 +58,9 @@ Ext.define('PortfolioItemCostTracking', {
             items: [{
                 xtype: 'rallydatefield',
                 itemId: 'dt-start',
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('dt-start'),
-                stateEvents: ['change'],
+                //stateful: true,
+                //stateId: this.getContext().getScopedStateId('dt-start'),
+                //stateEvents: ['change'],
                 margin: '0 10 0 0',
                 value: this.defaults.startDate,
                 padding: 5,
@@ -75,9 +75,9 @@ Ext.define('PortfolioItemCostTracking', {
             },{
                 xtype: 'rallydatefield',
                 itemId: 'dt-end',
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('dt-end'),
-                stateEvents: ['change'],
+                //stateful: true,
+                //stateId: this.getContext().getScopedStateId('dt-end'),
+                //stateEvents: ['change'],
                 margin: '0 10 0 0',
                 labelSeparator: '',
                 labelCls: 'lbl',
@@ -91,9 +91,9 @@ Ext.define('PortfolioItemCostTracking', {
             },{
                 xtype: 'rallyportfolioitemtypecombobox',
                 itemId: 'cb-type',
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('cb-type'),
-                stateEvents: ['change'],
+                //stateful: true,
+                //stateId: this.getContext().getScopedStateId('cb-type'),
+                //stateEvents: ['change'],
                 margin: '0 10 0 0',
                 fieldLabel: 'Portfolio Item Type',
                 labelAlign: 'top',
@@ -268,32 +268,32 @@ Ext.define('PortfolioItemCostTracking', {
             gridConfig: {
                 columnCfgs: this._getColumnCfgs(),
                 customColumns: this._getCustomColumns(),
-                store: store,
-                stateId: this.getContext().getScopedStateId('cost-grid-test11'),
-                stateful: true
+                store: store
+            //    stateId: this.getContext().getScopedStateId('cost-grid-test11'),
+            //    stateful: true
             },
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
                 filterControlConfig: {
-                    modelNames: modelNames,
-                    stateful: true,
-                    stateId: this.getContext().getScopedStateId('cost-grid-filter'),
-                    margin: '15px 10px 0px 0px'
+                    modelNames: modelNames
+                    //stateful: true,
+                    //stateId: this.getContext().getScopedStateId('cost-grid-filter'),
+                    //margin: '15px 10px 0px 0px'
                 },
                 showOwnerFilter: true,
                 ownerFilterControlConfig: {
-                    stateful: true,
-                    stateId: this.getContext().getScopedStateId('cost-grid-owner-filter'),
-                    margin: '15px 10px 0px 0px'
+                    //stateful: true,
+                    //stateId: this.getContext().getScopedStateId('cost-grid-owner-filter'),
+                    //margin: '15px 10px 0px 0px'
                 }
             },{
                 ptype: 'treegridcontainerfieldpicker',
                 headerPosition: 'left',
                 modelNames: modelNames,
-                alwaysSelectedFields: ['_rollupDataPreliminaryBudget','_rollupDataTotalCost','_rollupDataRemainingCost','_rollupDataActualCost'],
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('cost-grid-field-picker'),
-                margin: '15px 0px 10px 10px'
+                alwaysSelectedFields: ['_rollupDataPreliminaryBudget','_rollupDataTotalCost','_rollupDataRemainingCost','_rollupDataActualCost']
+                //stateful: true,
+                //stateId: this.getContext().getScopedStateId('cost-grid-field-picker'),
+                //margin: '15px 0px 10px 10px'
             },{
                 ptype: 'rallygridboardactionsmenu',
                 menuItems: [

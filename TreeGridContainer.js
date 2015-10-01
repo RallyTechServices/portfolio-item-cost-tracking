@@ -198,8 +198,8 @@ Ext.define('TreeGridContainer', {
                 enableRanking: false, //context.getWorkspace().WorkspaceConfiguration.DragDropRankingEnabled,
                 defaultSortToRank: true,
                 enableBlockedReasonPopover: true,
-                stateId: this.stateId + '-grid',
-                stateful: true,
+                //stateId: this.stateId + '-grid',
+                //stateful: true,
                 height: this.getAvailableGridBoardHeight()
             }, this.gridConfig);
 
