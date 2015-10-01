@@ -209,8 +209,9 @@
         updateFields: function (fields, suspendLoad) {
             this._fields = fields;
 
-            var grid = this.cmp.getGrid();
-//            grid.reconfigureWithColumns(fields, false, suspendLoad);
+            console.log('updateFields', fields);
+
+            this.cmp.updateFields(fields);
 
             this._updatePickerValue(fields);
         },

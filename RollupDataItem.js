@@ -35,6 +35,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
             } else {
                 this.remainingCost = this.totalCost - this.actualCost;
             }
+            console.log('constructor task', this.data.FormattedID, this.actualCost, this.totalCost, this.remainingCost);
         }
     },
     addChild: function(child){

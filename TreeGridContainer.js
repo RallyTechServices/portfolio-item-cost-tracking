@@ -33,7 +33,7 @@ Ext.define('TreeGridContainer', {
         {
             itemId: 'header',
             xtype: 'rallyleftright',
-            padding: '4 10',
+            padding: '4 10 10 10',
             overflowX: 'hidden'
         }
     ],
@@ -153,8 +153,45 @@ Ext.define('TreeGridContainer', {
     getAvailableGridBoardHeight: function () {
         return this.getHeight() - this.down('#header').getHeight() - 10;
     },
+    /**
+     * This function is called from the FieldPicker plugin to update the displayed fields
+     * In the Gridboard, this calls the reconfigureWithColumns function on the TreeGrid
+     * @param fields
+     */
+    updateFields: function(fields){
+        console.log('updateFields', fields);
+        var grid = this.getGrid();
+
+        columnCfgs = grid._getStatefulColumns(fields);
+
+        //Always use the old configuration if we have it.
+        fieldscolumnCfgs = grid._mergeColumnConfigs(columnCfgs, this.columns);
+
+        columnCfgs = Ext.Array.merge(columnCfgs, this.gridConfig.customColumns || []);
+
+        console.log('columnCfgs', columnCfgs);
+
+        grid.columnCfgs = columnCfgs;
+
+       // grid.getStore().load();
+
+        //this._buildColumns(true);  //sets grid.columns
+        //this.getStore().fetch = this._buildFetch();
+        //
+        //this.on('reconfigure', function() {
+        //    this.headerCt.setSortState();
+        //}, this, {single: true});
+        //this.reconfigure(null, this.columns);
+        //this.columns = this.headerCt.items.getRange();
+        //
+        //if (!suspendLoad) {
+        //    this.getStore().load();
+        //}
+
+    },
     _getGridConfig: function () {
         var context = this.getContext() || Rally.environment.getContext(),
+            columnCfgs = Ext.Array.merge(this.gridConfig.columnCfgs || [], this.gridConfig.customColumns || []),
             config = Ext.merge({
                 xtype: 'rallytreegrid',
                 context: context,
@@ -166,6 +203,8 @@ Ext.define('TreeGridContainer', {
                 height: this.getAvailableGridBoardHeight()
             }, this.gridConfig);
 
+            config.columnCfgs = columnCfgs;
+
         if (_.isEmpty(config.store)) {
             Ext.Error.raise('No grid store configured');
         }
@@ -173,10 +212,13 @@ Ext.define('TreeGridContainer', {
     },
     _getConfiguredFilters: function (extraFilters, types) {
         var filters = _.compact(Ext.Array.merge(
+            this.getGrid().store.filters,
             this.storeConfig && this.storeConfig.filters,
-            this.gridConfig.storeConfig && this.gridConfig.storeConfig.filters,
+            this.gridConfig && this.gridConfig.storeConfig && this.gridConfig.storeConfig.filters,
             extraFilters));
-        console.log('_getConfiguredFilters',this.storeConfig.filters.toString(), filters.toString(),
+
+
+        console.log('_getConfiguredFilters',filters.toString(),
             _.isFunction(this.getModels()[0].getArtifactComponentModel));
 
         // don't do this if not artifact model or we are using filter collection

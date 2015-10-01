@@ -51,9 +51,10 @@ Ext.define('PortfolioItemCostTracking', {
         this.fixedHeader = Ext.create('Ext.container.Container',{
             itemId: 'header-controls',
             width: 460,
+            height: 50,
             layout: 'hbox',
-            margin: '0 20 0 0',
-            padding: '0 0 0 20',
+            padding: '0 0 20 20',
+            margin: 10,
             items: [{
                 xtype: 'rallydatefield',
                 itemId: 'dt-start',
@@ -61,6 +62,8 @@ Ext.define('PortfolioItemCostTracking', {
                 stateId: this.getContext().getScopedStateId('dt-start'),
                 stateEvents: ['change'],
                 margin: '0 10 0 0',
+                value: this.defaults.startDate,
+                padding: 5,
                 fieldLabel: 'Start Date',
                 labelSeparator: '',
                 labelCls: 'lbl',
@@ -78,6 +81,7 @@ Ext.define('PortfolioItemCostTracking', {
                 margin: '0 10 0 0',
                 labelSeparator: '',
                 labelCls: 'lbl',
+                value: this.defaults.endDate,
                 fieldLabel: 'End Date',
                 labelAlign: 'top',
                 listeners: {
@@ -155,17 +159,18 @@ Ext.define('PortfolioItemCostTracking', {
             fetch: ['FormattedID','Name','Project','PreliminaryEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
             enableHierarchy: true,
             listeners: {
-                scope: me,
-                load: me._setRollupData
+                scope: this,
+                load: this._setRollupData
             }
         }).then({
             scope: this,
             success: function(store) {
-                store.model.addField({persist: false, name: '_rollupDataPreliminaryBudget', type: 'auto', defaultValue: null, displayName: 'Preliminary Budget'});
-                store.model.addField({persist: false, name: '_rollupDataTotalCost', type: 'auto', defaultValue: null, displayName: 'Total Cost'});
-                store.model.addField({persist: false, name: '_rollupDataRemainingCost', type: 'auto', defaultValue: null, displayName: 'Remaining Cost'});
-                store.model.addField({persist: false, name: '_rollupDataActualCost', type: 'auto', defaultValue: null, displayName: 'Actual Cost'});
-                store.model.addField({persist: false, name: '_rollupDataToolTip', type: 'string', defaultValue: null});
+
+                store.model.addField({name: '_rollupDataPreliminaryBudget', type: 'auto', defaultValue: null, displayName: 'Preliminary Budget'});
+                store.model.addField({name: '_rollupDataTotalCost', type: 'auto', defaultValue: null, displayName: 'Total Cost'});
+                store.model.addField({name: '_rollupDataRemainingCost', type: 'auto', defaultValue: null, displayName: 'Remaining Cost'});
+                store.model.addField({name: '_rollupDataActualCost', type: 'auto', defaultValue: null, displayName: 'Actual Cost'});
+                store.model.addField({name: '_rollupDataToolTip', type: 'string', defaultValue: null});
 
                 this._updateDisplay(store, modelNames);
             }
@@ -241,6 +246,7 @@ Ext.define('PortfolioItemCostTracking', {
     },
     _setRollupData: function(store, node, records, success){
          var rollup_data = this.rollupData;
+        console.log('_setrollupData', store, node, records.length, success);
         if (!rollup_data) {
             this.rollupData = Ext.create('PortfolioItemCostTracking.RollupData',{
                 portfolioItemTypes: this.portfolioItemTypes
@@ -258,13 +264,12 @@ Ext.define('PortfolioItemCostTracking', {
         this.add({
             xtype: 'treegridcontainer',
             context: this.getContext(),
-            storeConfig: {
-                filters: this._getDateFilters()
-            },
+
             gridConfig: {
                 columnCfgs: this._getColumnCfgs(),
+                customColumns: this._getCustomColumns(),
                 store: store,
-                stateId: this.getContext().getScopedStateId('cost-grid-test7'),
+                stateId: this.getContext().getScopedStateId('cost-grid-test11'),
                 stateful: true
             },
             plugins:[{
@@ -313,6 +318,34 @@ Ext.define('PortfolioItemCostTracking', {
             height: this.getHeight()
         });
     },
+    _getCustomColumns: function(){
+        return [{
+            //dataIndex: '_rollupDataPreliminaryBudget',
+            text: 'Preliminary Budget',
+            align: 'right',
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataPreliminaryBudget'
+        }, {
+            //dataIndex: '_rollupDataTotalCost',
+            text: 'Total Projected',
+            align: 'right',
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataTotalCost'
+        },{
+            //dataIndex: '_rollupDataActualCost',
+            text: "Actual Cost To Date",
+            align: 'right',
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataActualCost'
+        },{
+            //dataIndex: '_rollupDataRemainingCost',
+            text: "Remaining Cost",
+            align: 'right',
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataRemainingCost'
+            //renderer: PortfolioItemCostTracking.CostCalculator.costRemainingRenderer
+        }];
+    },
     _getColumnCfgs: function(){
 
         return [{
@@ -327,30 +360,31 @@ Ext.define('PortfolioItemCostTracking', {
         },{
             dataIndex: 'PercentDoneByStoryPlanEstimate',
             text: '% Done by Story Points'
-        },{
-            dataIndex: '_rollupDataPreliminaryBudget',
-            text: 'Preliminary Budget',
-            align: 'right',
-            xtype: 'costtemplatecolumn',
-            costField: '_rollupDataPreliminaryBudget'
-        }, {
-            dataIndex: '_rollupDataTotalCost',
-            text: 'Total Projected',
-            align: 'right',
-            xtype: 'costtemplatecolumn',
-            costField: '_rollupDataTotalCost'
-        },{
-            dataIndex: '_rollupDataActualCost',
-            text: "Actual Cost To Date",
-            align: 'right',
-            xtype: 'costtemplatecolumn',
-            costField: '_rollupDataActualCost'
-        },{
-            dataIndex: '_rollupDataRemainingCost',
-            text: "Remaining Cost",
-            align: 'right',
-            xtype: 'costtemplatecolumn',
-            costField: '_rollupDataRemainingCost'
+        //},{
+        //    //dataIndex: '_rollupDataPreliminaryBudget',
+        //    text: 'Preliminary Budget',
+        //    align: 'right',
+        //    xtype: 'costtemplatecolumn',
+        //    costField: '_rollupDataPreliminaryBudget'
+        //}, {
+        //    //dataIndex: '_rollupDataTotalCost',
+        //    text: 'Total Projected',
+        //    align: 'right',
+        //    xtype: 'costtemplatecolumn',
+        //    costField: '_rollupDataTotalCost'
+        //},{
+        //    //dataIndex: '_rollupDataActualCost',
+        //    text: "Actual Cost To Date",
+        //    align: 'right',
+        //    xtype: 'costtemplatecolumn',
+        //    costField: '_rollupDataActualCost'
+        //},{
+        //    //dataIndex: '_rollupDataRemainingCost',
+        //    text: "Remaining Cost",
+        //    align: 'right',
+        //    xtype: 'costtemplatecolumn',
+        //    costField: '_rollupDataRemainingCost'
+        //    //renderer: PortfolioItemCostTracking.CostCalculator.costRemainingRenderer
         }];
     },
     getSettingsFields: function() {

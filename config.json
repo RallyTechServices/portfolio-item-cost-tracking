@@ -9,7 +9,7 @@
       "WsapiToolbox.js",
       "CostCalculator.js",
       "CostPerProjectSettings.js",
-      "PortfolioItemTree.js",
+      "RollupData.js",
       "RollupDataItem.js",
       "ProjectPicker.js",
       "overrides.js",

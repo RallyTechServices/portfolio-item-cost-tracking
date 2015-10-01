@@ -11,6 +11,7 @@ Ext.define('Ext.CostTemplate', {
         me.tpl = new Ext.XTemplate("<tpl>{[this.getCost(values)]}</tpl>",{
             costField: me.costField,
             getCost: function(values){
+                console.log('getCost', values.FormattedID, values[this.costField]);
                 if (values[this.costField] === null){
                     return PortfolioItemCostTracking.CostCalculator.notAvailableText;
                 } else {
