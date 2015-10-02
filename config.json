@@ -15,7 +15,8 @@
       "overrides.js",
       "PluginTreeGridContainerCustomFilter.js",
       "PluginTreeGridContainerFieldPicker.js",
-      "TreeGridContainer.js"
+      "TreeGridContainer.js",
+      "Utilities.js"
    ],
    "css": [
       "app.css"
