@@ -3,8 +3,6 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
     children: undefined,
     type: undefined,
 
-
-
     totalUnits: null,
     actualUnits: null,
     preliminaryBudget: null,
@@ -12,7 +10,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
     remainingCost: 0,
     totalCost: 0,
     tooltip: undefined,
-    projects: undefined,
+    projectCosts: undefined,
     /**
      * data is from the record associated with the rollup data
      */
@@ -21,25 +19,16 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
     constructor: function(config){
         this.data = config.data;
         this.type = config.type;
+
         this._updateProjectNameAndCostHash(this.data.Project);
 
-        if (this.data.PreliminaryEstimate && this.data.PreliminaryEstimate.Value){
-            this.preliminaryBudget = this.data.PreliminaryEstimate.Value  * PortfolioItemCostTracking.CostCalculator.getCostPerUnit(this.data.Project._ref);
-        }
+        this.preliminaryBudget = this.calculatePreliminaryBudget(this.data);
 
-        if (this.type.toLowerCase() === 'hierarchicalrequirement' ){
-            this.actualCost = PortfolioItemCostTracking.CostCalculator.calculateActualCostForStory(this.data);
-            this.remainingCost = PortfolioItemCostTracking.CostCalculator.calculateTotalCostForStory(this.data) - this.actualCost;
-            this.totalCost = PortfolioItemCostTracking.CostCalculator.calculateTotalCostForStory(this.data);
-            this.actualUnits = PortfolioItemCostTracking.CostCalculator.getActualUnitsForStory(this.data);
-            this.totalUnits = PortfolioItemCostTracking.CostCalculator.getTotalUnitsForStory(this.data);
-        }
-
-        if (this.type.toLowerCase() === 'task'){
-            this.actualCost = PortfolioItemCostTracking.CostCalculator.calculateActualCostForTask(this.data);
-            this.totalCost = PortfolioItemCostTracking.CostCalculator.calculateTotalCostForTask(this.data);
-            this.actualUnits = PortfolioItemCostTracking.CostCalculator.getActualUnitsForTask(this.data);
-            this.totalUnits = PortfolioItemCostTracking.CostCalculator.getTotalUnitsForTask(this.data);
+        if ((this.type.toLowerCase() === 'hierarchicalrequirement' )||(this.type.toLowerCase() === 'task')){
+            this.actualCost = this.calculateActualCost(this.data, this.type.toLowerCase());
+            this.totalCost = this.calculateTotalCost(this.data,this.type.toLowerCase());
+            this.actualUnits = this.getActualUnits(this.data,this.type.toLowerCase());
+            this.totalUnits = this.getTotalUnits(this.data,this.type.toLowerCase());
             if (this.actualCost === null || this.totalCost === null) {
                 this.remainingCost = null;
             } else {
@@ -66,11 +55,11 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
             total_units = 0;
 
         _.each(this.children, function (s) {
-            total_value += PortfolioItemCostTracking.CostCalculator.calculateTotalCostForStory(s);
-            actual_value += PortfolioItemCostTracking.CostCalculator.calculateActualCostForStory(s);
+            total_value += this.calculateTotalCost(s, 'hierarchicalrequirement');
+            actual_value += this.calculateActualCost(s, 'hierarchicalrequirement');
             this._updateProjectNameAndCostHash(s.Project);
-            actual_units += PortfolioItemCostTracking.CostCalculator.getActualUnitsForStory(s);
-            total_units += PortfolioItemCostTracking.CostCalculator.getTotalUnitsForStory(s);
+            actual_units += this.getActualUnits(s, 'hierarchicalrequirement');
+            total_units += this.getTotalUnits(s, 'hierarchicalrequirement');
         }, this);
 
         this.actualUnits = actual_units;
@@ -85,9 +74,11 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
             total_units = this.totalUnits === null ? '--' : this.totalUnits;
 
 
-        var html = Ext.String.format('[{0}] completed {1}/{2}<br/><br/>Cost per unit:<br/>', this.getType(), actual_units, total_units);
+        var calc_type_name = PortfolioItemCostTracking.Settings.getCalculationTypeDisplayName();
+
+        var html = Ext.String.format('[{0}] completed {1}/{2}<br/><br/>Cost per unit:<br/>', calc_type_name, actual_units, total_units);
         _.each(this.projectCosts, function(project_cost, project_name){
-            html += Ext.String.format('{0} {1}<br/>', PortfolioItemCostTracking.CostCalculator.formatCost(project_cost), project_name);
+            html += Ext.String.format('{0} {1}<br/>', PortfolioItemCostTracking.Settings.formatCost(project_cost), project_name);
         });
 
         return html;
@@ -98,24 +89,59 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
         this.projectCosts = this.projectCosts || {};
 
         var name = project._refObjectName,
-            cost = PortfolioItemCostTracking.CostCalculator.getCostPerUnit(project._ref);
+            cost = PortfolioItemCostTracking.Settings.getCostPerUnit(project._ref);
 
-        if (PortfolioItemCostTracking.CostCalculator.isProjectUsingNormalizedCost(project._ref)){
+        if (PortfolioItemCostTracking.Settings.isProjectUsingNormalizedCost(project._ref)){
             name =  "normalized (default)";
         }
-        console.log('--updateProjectNameandCostHash', name, cost);
         this.projectCosts[name] = cost;
-        console.log('--updateProjectNameandCostHash', this.data.FormattedID, this.projectCosts);
     },
-    getType: function(){
-        switch(PortfolioItemCostTracking.CostCalculator.calculationType){
-            case PortfolioItemCostTracking.CostCalculator.calculationTypeStoryPoints:
-                return 'Story points';
-            case PortfolioItemCostTracking.CostCalculator.calculationTypeTaskHours:
-                return 'Task actuals';
-            case PortfolioItemCostTracking.CostCalculator.calculationTypeTimesheets:
-                return 'Time spent';
+    calculateActualCost: function(data, modelType){
+        var units = this.getActualUnits(data, modelType);
+        if (units === null){
+            return null;
         }
-        return 'Unknown';
-   }
+        return units * PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
+    },
+    calculateTotalCost: function(data, modelType){
+
+        var units = this.getTotalUnits(data, modelType);
+        if (units === null){
+            return null;
+        }
+        return units * PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
+    },
+    getActualUnits: function(data, modelType){
+        var calcType = PortfolioItemCostTracking.Settings.getCalculationTypeSettings(),
+            fn = 'actualUnitsForStoryFn';
+
+        if (modelType.toLowerCase() === 'task'){
+            fn = 'actualUnitsForTaskFn';
+        }
+
+        if (calcType[fn]) {
+            return calcType[fn](data);
+        }
+        return null;
+    },
+    getTotalUnits: function(data, modelType){
+        var calcType = PortfolioItemCostTracking.Settings.getCalculationTypeSettings(),
+            fn = 'totalUnitsForStoryFn';
+
+        if (modelType.toLowerCase() === 'task'){
+            fn = 'totalUnitsForTaskFn';
+        }
+        if (calcType[fn]) {
+            return calcType[fn](data);
+        }
+        return null;
+    },
+    calculatePreliminaryBudget: function(data){
+
+        if (data && data.PreliminaryEstimate && data.PreliminaryEstimate.Value){
+            var cpu = PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
+            return cpu * data.PreliminaryEstimate.Value;
+        }
+        return null;
+    }
 });

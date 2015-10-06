@@ -7,7 +7,6 @@
       "App.js",
       "Settings.js",
       "WsapiToolbox.js",
-      "CostCalculator.js",
       "CostPerProjectSettings.js",
       "RollupData.js",
       "RollupDataItem.js",

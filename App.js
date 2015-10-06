@@ -10,7 +10,7 @@ Ext.define('PortfolioItemCostTracking', {
 
     config: {
         defaultSettings: {
-            calculationType: 'points',
+            selectedCalculationType: 'points',
             normalizedCostPerUnit: 1000,
             projectCostPerUnit: {},
             currencySign: '$'
@@ -115,23 +115,23 @@ Ext.define('PortfolioItemCostTracking', {
     },
     _initializeSettings: function(settings, doneScheduleStates){
 
-        PortfolioItemCostTracking.CostCalculator.notAvailableText = "--";
-        PortfolioItemCostTracking.CostCalculator.currencySign = settings.currencySign;
-        PortfolioItemCostTracking.CostCalculator.currencyPrecision = 0;
-        PortfolioItemCostTracking.CostCalculator.currencyEnd = false;
+        PortfolioItemCostTracking.Settings.notAvailableText = "--";
+        PortfolioItemCostTracking.Settings.currencySign = settings.currencySign;
+        PortfolioItemCostTracking.Settings.currencyPrecision = 0;
+        PortfolioItemCostTracking.Settings.currencyEnd = false;
         if (doneScheduleStates){
-            PortfolioItemCostTracking.CostCalculator.completedScheduleStates = doneScheduleStates;
+            PortfolioItemCostTracking.Settings.completedScheduleStates = doneScheduleStates;
         }
 
-        PortfolioItemCostTracking.CostCalculator.normalizedCostPerUnit = settings.normalizedCostPerUnit;
+        PortfolioItemCostTracking.Settings.normalizedCostPerUnit = settings.normalizedCostPerUnit;
 
         var project_cpu = settings.projectCostPerUnit || {};
         if (!Ext.isObject(project_cpu)){
             project_cpu = Ext.JSON.decode(project_cpu);
         }
-        PortfolioItemCostTracking.CostCalculator.projectCostPerUnit = project_cpu;
+        PortfolioItemCostTracking.Settings.projectCostPerUnit = project_cpu;
 
-        PortfolioItemCostTracking.CostCalculator.calculationType = settings.calculationType || 'points';
+        PortfolioItemCostTracking.Settings.selectedCalculationType = settings.calculationType || 'points';
     },
 
      _initializeGrid: function(modelNames){
@@ -321,17 +321,6 @@ Ext.define('PortfolioItemCostTracking', {
     },
     _getCustomColumns: function(){
         return [{
-            //dataIndex: '_rollupDataPreliminaryBudget',
-            text: 'Preliminary Budget',
-            align: 'right',
-            xtype: 'costtemplatecolumn',
-            costField: '_rollupDataPreliminaryBudget'
-        }, {
-            text: 'Total Projected',
-            align: 'right',
-            xtype: 'costtemplatecolumn',
-            costField: '_rollupDataTotalCost'
-        },{
             text: "Actual Cost To Date",
             align: 'right',
             xtype: 'costtemplatecolumn',
@@ -341,6 +330,17 @@ Ext.define('PortfolioItemCostTracking', {
             align: 'right',
             xtype: 'costtemplatecolumn',
             costField: '_rollupDataRemainingCost'
+            //dataIndex: '_rollupDataPreliminaryBudget',
+        }, {
+            text: 'Total Projected',
+            align: 'right',
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataTotalCost'
+        },{
+            text: 'Preliminary Budget',
+            align: 'right',
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataPreliminaryBudget'
         }];
     },
     _getColumnCfgs: function(){
@@ -352,8 +352,7 @@ Ext.define('PortfolioItemCostTracking', {
         },{
             dataIndex: 'Project',
             text: 'Project',
-            editor: false,
-            isCellEditable: false
+            editor: false
         },{
             dataIndex: 'PlanEstimate',
             text: 'Plan Estimate'
@@ -363,7 +362,7 @@ Ext.define('PortfolioItemCostTracking', {
         }];
     },
     getSettingsFields: function() {
-        return PortfolioItemCostTracking.Settings.getFields();
+        return PortfolioItemCostTracking.Settings.getFields(this.getSettings());
     },
     onSettingsUpdate: function (settings){
         this._initializeSettings(settings);

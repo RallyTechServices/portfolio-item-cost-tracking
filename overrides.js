@@ -14,9 +14,9 @@ Ext.define('Ext.CostTemplate', {
             costField: me.costField,
             getCost: function(values){
                 if (values[this.costField] === null){
-                    return PortfolioItemCostTracking.CostCalculator.notAvailableText;
+                    return PortfolioItemCostTracking.Settings.notAvailableText;
                 } else {
-                    return PortfolioItemCostTracking.CostCalculator.formatCost(values[this.costField] || 0);
+                    return PortfolioItemCostTracking.Settings.formatCost(values[this.costField] || 0);
                 }
             },
             getTooltip: function(values){

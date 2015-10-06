@@ -43,7 +43,11 @@ Ext.define('PortfolioItemCostTracking.CostPerProjectSettings',{
         var decodedValue = {};
 
         if (this.value && !_.isEmpty(this.value)){
-            decodedValue = Ext.JSON.decode(this.value);
+            if (!Ext.isObject(this.value)){
+                decodedValue = Ext.JSON.decode(this.value);
+            } else {
+                decodedValue = this.value;
+            }
             console.log('decodedValue',decodedValue);
         }
 
