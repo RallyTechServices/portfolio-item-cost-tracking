@@ -131,7 +131,7 @@ Ext.define('PortfolioItemCostTracking', {
         }
         PortfolioItemCostTracking.Settings.projectCostPerUnit = project_cpu;
 
-        PortfolioItemCostTracking.Settings.selectedCalculationType = settings.calculationType || 'points';
+        PortfolioItemCostTracking.Settings.setCalculationType(settings.selectedCalculationType);
     },
 
      _initializeGrid: function(modelNames){
@@ -156,7 +156,7 @@ Ext.define('PortfolioItemCostTracking', {
         Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
             models: modelNames,
             filters: filters,
-            fetch: ['FormattedID','Name','Project','PreliminaryEstimate','PlanEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
+            fetch: PortfolioItemCostTracking.Settings.getTreeFetch(),
             enableHierarchy: true,
             listeners: {
                 scope: this,

@@ -69,6 +69,7 @@ Ext.define('PortfolioItemCostTracking.Settings', {
 
     portfolioItemFetch: ['ObjectID','Parent','Children','UserStories','PreliminaryEstimate','Value'],
     storyFetch: ['ObjectID','Project','ScheduleState','PortfolioItem'],
+    treeFetch: ['FormattedID','Name','Project','PreliminaryEstimate','PlanEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
 
     notAvailableText: '--',
 
@@ -80,7 +81,29 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         {name: "Japanese Yen", value: "&#165;"},
         {name: "Brazilian Real", value: "R$"}
     ],
+    setCalculationType: function(type){
+        console.log('setCalculationType', type);
+        //Check that actuals is on, and warn user if it is not.
+        if (type === 'taskHours'){
+            Rally.data.ModelFactory.getModel({
+                type: 'task',
+                success: function(model){
+                    var field = model.getField('Actuals');
+                    console.log('validate', field);
+                    if (field && field.hidden){
+                        Rally.ui.notify.Notifier.showWarning({message: 'The Task Actuals field is not visible in the current project.  As a result, Task Actuals values may be 0.'});
+                    }
+                }
+            });
+        }
 
+
+        if (PortfolioItemCostTracking.Settings.calculationTypes[type]){
+            PortfolioItemCostTracking.Settings.selectedCalculationType = type;
+        } else {
+            PortfolioItemCostTracking.Settings.selectedCalculationType = 'points';
+        }
+    },
     getCalculationTypeSettings: function(){
         return PortfolioItemCostTracking.Settings.calculationTypes[PortfolioItemCostTracking.Settings.selectedCalculationType] || PortfolioItemCostTracking.Settings.calculationTypes.points;
     },
@@ -102,6 +125,12 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             return false;
         }
         return true;
+    },
+    getTreeFetch: function(fetch){
+        if (!fetch){
+            fetch = [];
+        }
+        return Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.treeFetch);
     },
     getStoryFetch: function(fetch){
         if (!fetch){
