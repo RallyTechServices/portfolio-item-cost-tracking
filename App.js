@@ -156,7 +156,7 @@ Ext.define('PortfolioItemCostTracking', {
         Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
             models: modelNames,
             filters: filters,
-            fetch: ['FormattedID','Name','Project','PreliminaryEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
+            fetch: ['FormattedID','Name','Project','PreliminaryEstimate','PlanEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
             enableHierarchy: true,
             listeners: {
                 scope: this,
@@ -256,7 +256,9 @@ Ext.define('PortfolioItemCostTracking', {
 
         _.each(records, function(r) {
             rollup_data.setRollupData(r);
+            r.set('cls','treeItem');
         }, this);
+
     },
     _updateDisplay: function(store, modelNames){
         var me = this;
@@ -310,7 +312,6 @@ Ext.define('PortfolioItemCostTracking', {
             }],
             listeners: {
                 beforerender: function(gb){
-                    console.log('beforeRender');
                     this.addHeader(gb);
                 },
                 scope: this
@@ -326,24 +327,20 @@ Ext.define('PortfolioItemCostTracking', {
             xtype: 'costtemplatecolumn',
             costField: '_rollupDataPreliminaryBudget'
         }, {
-            //dataIndex: '_rollupDataTotalCost',
             text: 'Total Projected',
             align: 'right',
             xtype: 'costtemplatecolumn',
             costField: '_rollupDataTotalCost'
         },{
-            //dataIndex: '_rollupDataActualCost',
             text: "Actual Cost To Date",
             align: 'right',
             xtype: 'costtemplatecolumn',
             costField: '_rollupDataActualCost'
         },{
-            //dataIndex: '_rollupDataRemainingCost',
             text: "Remaining Cost",
             align: 'right',
             xtype: 'costtemplatecolumn',
             costField: '_rollupDataRemainingCost'
-            //renderer: PortfolioItemCostTracking.CostCalculator.costRemainingRenderer
         }];
     },
     _getColumnCfgs: function(){
@@ -358,33 +355,11 @@ Ext.define('PortfolioItemCostTracking', {
             editor: false,
             isCellEditable: false
         },{
+            dataIndex: 'PlanEstimate',
+            text: 'Plan Estimate'
+        }, {
             dataIndex: 'PercentDoneByStoryPlanEstimate',
             text: '% Done by Story Points'
-        //},{
-        //    //dataIndex: '_rollupDataPreliminaryBudget',
-        //    text: 'Preliminary Budget',
-        //    align: 'right',
-        //    xtype: 'costtemplatecolumn',
-        //    costField: '_rollupDataPreliminaryBudget'
-        //}, {
-        //    //dataIndex: '_rollupDataTotalCost',
-        //    text: 'Total Projected',
-        //    align: 'right',
-        //    xtype: 'costtemplatecolumn',
-        //    costField: '_rollupDataTotalCost'
-        //},{
-        //    //dataIndex: '_rollupDataActualCost',
-        //    text: "Actual Cost To Date",
-        //    align: 'right',
-        //    xtype: 'costtemplatecolumn',
-        //    costField: '_rollupDataActualCost'
-        //},{
-        //    //dataIndex: '_rollupDataRemainingCost',
-        //    text: "Remaining Cost",
-        //    align: 'right',
-        //    xtype: 'costtemplatecolumn',
-        //    costField: '_rollupDataRemainingCost'
-        //    //renderer: PortfolioItemCostTracking.CostCalculator.costRemainingRenderer
         }];
     },
     getSettingsFields: function() {

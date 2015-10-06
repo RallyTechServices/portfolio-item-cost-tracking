@@ -8,16 +8,22 @@ Ext.define('Ext.CostTemplate', {
     initComponent: function(){
         var me = this;
 
-        me.tpl = new Ext.XTemplate("<tpl>{[this.getCost(values)]}</tpl>",{
+        Ext.QuickTips.init();
+
+        me.tpl = new Ext.XTemplate('<tpl><div data-qtip="{[this.getTooltip(values)]}">{[this.getCost(values)]}</div></tpl>',{
             costField: me.costField,
             getCost: function(values){
-                console.log('getCost', values.FormattedID, values[this.costField]);
                 if (values[this.costField] === null){
                     return PortfolioItemCostTracking.CostCalculator.notAvailableText;
                 } else {
                     return PortfolioItemCostTracking.CostCalculator.formatCost(values[this.costField] || 0);
                 }
-
+            },
+            getTooltip: function(values){
+                if (values._rollupDataToolTip){
+                    return values._rollupDataToolTip;
+                }
+                return '';
             }
 
         });

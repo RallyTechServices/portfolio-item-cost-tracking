@@ -235,9 +235,8 @@ Ext.define('TreeGridContainer', {
         if (this.currentCustomFilter) {
             this._applyGridFilters(grid, this.currentCustomFilter);
         }
-        return grid;
+       return grid;
     },
-
     _applyGridFilters: function (grid, filterObj) {
         if (!_.isEmpty(filterObj.types)) {
             grid.store.parentTypes = filterObj.types;

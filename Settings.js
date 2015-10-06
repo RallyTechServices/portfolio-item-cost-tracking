@@ -34,7 +34,7 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             margin: '10 0 10 0',
             items: [
                 { boxLabel: 'Based on Story Points', name: 'calculationType',inputValue: 'points', checked: true },
-                { boxLabel: 'Based on Task Hours', name: 'calculationType',inputValue: 'taskHours'},
+                { boxLabel: 'Based on Task Actuals', name: 'calculationType',inputValue: 'taskHours'},
                 { boxLabel: 'Using Timesheets', name: 'calculationType',inputValue: 'timesheets', disabled: true }
             ]
         },{
