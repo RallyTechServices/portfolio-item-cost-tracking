@@ -207,13 +207,14 @@
          * @param {Boolean} true to suspend store load if it will be triggered elsewhere
          */
         updateFields: function (fields, suspendLoad) {
-            this._fields = fields;
+            this._fields = _.map(fields, function (field) {
+                return field.get('name');
+            });
 
-            console.log('updateFields', fields);
+            this.cmp.updateFields(fields,false,suspendLoad);
+            this._updatePickerValue(this._fields);
 
-            this.cmp.updateFields(fields);
-
-            this._updatePickerValue(fields);
+            this.cmp.fireEvent('viewstatesave', this);
         },
 
         _updatePickerValue: function(fields) {
@@ -228,7 +229,7 @@
                     return field.get('name');
                 });
 
-            this.updateFields(fields);
+            this.updateFields(fieldPicker.getValue());
 
             popover.close();
         }

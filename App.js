@@ -10,7 +10,7 @@ Ext.define('PortfolioItemCostTracking', {
 
     config: {
         defaultSettings: {
-            calculationType: 'points',
+            selectedCalculationType: 'points',
             normalizedCostPerUnit: 1000,
             projectCostPerUnit: {},
             currencySign: '$'
@@ -37,8 +37,7 @@ Ext.define('PortfolioItemCostTracking', {
         ]).then({
             scope: this,
             success: function(results){
-                this.portfolioItemTypes = results[0];
-                this._initializeSettings(this.getSettings(), results[1]);
+                this._initializeSettings(this.getSettings(), results[1], results[0]);
                 this._createPickers();
             },
             failure: function(msg){
@@ -113,42 +112,43 @@ Ext.define('PortfolioItemCostTracking', {
         this.modelNames = [piType];
         this._initializeGrid(this.modelNames);
     },
-    _initializeSettings: function(settings, doneScheduleStates){
+    _initializeSettings: function(settings, doneScheduleStates, portfolioItemTypes){
 
-        PortfolioItemCostTracking.CostCalculator.notAvailableText = "--";
-        PortfolioItemCostTracking.CostCalculator.currencySign = settings.currencySign;
-        PortfolioItemCostTracking.CostCalculator.currencyPrecision = 0;
-        PortfolioItemCostTracking.CostCalculator.currencyEnd = false;
+        PortfolioItemCostTracking.Settings.notAvailableText = "--";
+        PortfolioItemCostTracking.Settings.currencySign = settings.currencySign;
+        PortfolioItemCostTracking.Settings.currencyPrecision = 0;
+        PortfolioItemCostTracking.Settings.currencyEnd = false;
         if (doneScheduleStates){
-            PortfolioItemCostTracking.CostCalculator.completedScheduleStates = doneScheduleStates;
+            PortfolioItemCostTracking.Settings.completedScheduleStates = doneScheduleStates;
+        }
+        if (portfolioItemTypes){
+            PortfolioItemCostTracking.Settings.portfolioItemTypes = portfolioItemTypes;
         }
 
-        PortfolioItemCostTracking.CostCalculator.normalizedCostPerUnit = settings.normalizedCostPerUnit;
+        PortfolioItemCostTracking.Settings.normalizedCostPerUnit = settings.normalizedCostPerUnit;
 
         var project_cpu = settings.projectCostPerUnit || {};
         if (!Ext.isObject(project_cpu)){
             project_cpu = Ext.JSON.decode(project_cpu);
         }
-        PortfolioItemCostTracking.CostCalculator.projectCostPerUnit = project_cpu;
+        PortfolioItemCostTracking.Settings.projectCostPerUnit = project_cpu;
 
-        PortfolioItemCostTracking.CostCalculator.calculationType = settings.calculationType || 'points';
+        PortfolioItemCostTracking.Settings.setCalculationType(settings.selectedCalculationType);
     },
-
      _initializeGrid: function(modelNames){
-        var me = this;
 
-        if (this.rollupData){
-            this.rollupData.clearRollupData();
-        }
+         if (this.rollupData){
+             this.rollupData.clearRollupData();
+         }
 
-        if (this.down('treegridcontainer')){
-            if (this.fixedHeader && this.fixedHeader.rendered) {
-                var parent = this.fixedHeader.up();
-                if(parent && parent.remove){
-                    parent.remove(this.fixedHeader, false);
-                }
-            }
-            this.down('treegridcontainer').destroy();
+         if (this.down('treegridcontainer')){
+             if (this.fixedHeader && this.fixedHeader.rendered) {
+                 var parent = this.fixedHeader.up();
+                 if(parent && parent.remove){
+                     parent.remove(this.fixedHeader, false);
+                 }
+             }
+             this.down('treegridcontainer').destroy();
         }
 
         var filters = this._getDateFilters();
@@ -156,7 +156,7 @@ Ext.define('PortfolioItemCostTracking', {
         Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
             models: modelNames,
             filters: filters,
-            fetch: ['FormattedID','Name','Project','PreliminaryEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
+            fetch: PortfolioItemCostTracking.Settings.getTreeFetch(),
             enableHierarchy: true,
             listeners: {
                 scope: this,
@@ -165,7 +165,7 @@ Ext.define('PortfolioItemCostTracking', {
         }).then({
             scope: this,
             success: function(store) {
-
+                console.log('store',store.listeners);
                 store.model.addField({name: '_rollupDataPreliminaryBudget', type: 'auto', defaultValue: null, displayName: 'Preliminary Budget'});
                 store.model.addField({name: '_rollupDataTotalCost', type: 'auto', defaultValue: null, displayName: 'Total Cost'});
                 store.model.addField({name: '_rollupDataRemainingCost', type: 'auto', defaultValue: null, displayName: 'Remaining Cost'});
@@ -203,8 +203,53 @@ Ext.define('PortfolioItemCostTracking', {
             header.getLeft().add(this.fixedHeader);
         }
     },
-    _showExportMenu: function (button) {
-        console.log('export');
+    _showExportMenu: function () {
+        var filters = this._getDateFilters(),//Todo: Add custom filter settings
+            fetch = PortfolioItemCostTracking.Settings.getTreeFetch(),
+            root_model = this.modelNames[0],
+            export_columns = this._getExportColumns(); //Todo: add fetch settings
+
+         PortfolioItemCostTracking.Utilities.fetchExportData(root_model,filters,fetch,export_columns).then({
+            scope: this,
+            success: function(results){
+                console.log('success',results);
+                var cols = this._getFormattedIDExportColumns(root_model).concat(export_columns);
+                var rows = [];
+                _.each(results, function(row_hash){
+                    var row = [];
+                    _.each(cols, function(c){
+                        var col_idx = c;
+                        if (Ext.isObject(c)){
+                            col_idx = c.dataIndex || c.costField;
+                        }
+                        console.log(c,row_hash);
+                        row.push(row_hash[col_idx] || null);
+                    });
+                    rows.push(row.join(','));
+                });
+                var csv = rows.join("\r\n");
+               console.log('csv',csv);
+
+            },
+            failure: function(msg){
+                console.log('failure',msg);
+            }
+        });
+    },
+    _getFormattedIDExportColumns: function(rootModel){
+        var cols = [];
+        var pi_types = PortfolioItemCostTracking.Settings.getPortfolioItemTypes();
+        var idx = _.indexOf(pi_types,rootModel.toLowerCase());
+        if (idx >= 0){
+            cols = pi_types.slice(idx);
+        }
+        cols.push('hierarchicalrequirement');
+        return cols;
+    },
+    _getExportColumns: function(){
+        var cols = this._getColumnCfgs().concat(this._getCustomColumns());
+        return cols;
+        //Todo - order columns in same order as grid...
     },
     _getDateFilters: function(){
 
@@ -248,15 +293,44 @@ Ext.define('PortfolioItemCostTracking', {
          var rollup_data = this.rollupData;
         console.log('_setrollupData', store, node, records.length, success);
         if (!rollup_data) {
-            this.rollupData = Ext.create('PortfolioItemCostTracking.RollupData',{
-                portfolioItemTypes: this.portfolioItemTypes
-            });
+            this.rollupData = new PortfolioItemCostTracking.RollupData();
             rollup_data = this.rollupData;
         }
 
         _.each(records, function(r) {
             rollup_data.setRollupData(r);
         }, this);
+
+    },
+    _updateStore: function(fields){
+        var filters = this._getDateFilters();
+
+        var field_names = Ext.Array.map(fields, function(f){ return f.get('name'); });
+
+        Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
+            models: this.modelNames,
+            filters: filters,
+            fetch: PortfolioItemCostTracking.Settings.getTreeFetch(field_names),
+            enableHierarchy: true,
+            listeners: {
+                scope: this,
+                load: this._setRollupData
+            }
+        }).then({
+            scope: this,
+            success: function(store) {
+
+                store.model.addField({name: '_rollupDataPreliminaryBudget', type: 'auto', defaultValue: null, displayName: 'Preliminary Budget'});
+                store.model.addField({name: '_rollupDataTotalCost', type: 'auto', defaultValue: null, displayName: 'Total Cost'});
+                store.model.addField({name: '_rollupDataRemainingCost', type: 'auto', defaultValue: null, displayName: 'Remaining Cost'});
+                store.model.addField({name: '_rollupDataActualCost', type: 'auto', defaultValue: null, displayName: 'Actual Cost'});
+                store.model.addField({name: '_rollupDataToolTip', type: 'string', defaultValue: null});
+
+                this.down('treegridcontainer').gridConfig.columnCfgs = this._getColumnCfgs(fields);
+                this.down('treegridcontainer').updateStore(store);
+                //this._updateDisplay(store, modelNames);
+            }
+        });
     },
     _updateDisplay: function(store, modelNames){
         var me = this;
@@ -310,8 +384,10 @@ Ext.define('PortfolioItemCostTracking', {
             }],
             listeners: {
                 beforerender: function(gb){
-                    console.log('beforeRender');
                     this.addHeader(gb);
+                },
+                updatefields: function(fields){
+                    this._updateStore(fields);
                 },
                 scope: this
             },
@@ -320,77 +396,54 @@ Ext.define('PortfolioItemCostTracking', {
     },
     _getCustomColumns: function(){
         return [{
-            //dataIndex: '_rollupDataPreliminaryBudget',
-            text: 'Preliminary Budget',
-            align: 'right',
-            xtype: 'costtemplatecolumn',
-            costField: '_rollupDataPreliminaryBudget'
-        }, {
-            //dataIndex: '_rollupDataTotalCost',
-            text: 'Total Projected',
-            align: 'right',
-            xtype: 'costtemplatecolumn',
-            costField: '_rollupDataTotalCost'
-        },{
-            //dataIndex: '_rollupDataActualCost',
             text: "Actual Cost To Date",
             align: 'right',
             xtype: 'costtemplatecolumn',
             costField: '_rollupDataActualCost'
         },{
-            //dataIndex: '_rollupDataRemainingCost',
             text: "Remaining Cost",
             align: 'right',
             xtype: 'costtemplatecolumn',
             costField: '_rollupDataRemainingCost'
-            //renderer: PortfolioItemCostTracking.CostCalculator.costRemainingRenderer
+            //dataIndex: '_rollupDataPreliminaryBudget',
+        }, {
+            text: 'Total Projected',
+            align: 'right',
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataTotalCost'
+        },{
+            text: 'Preliminary Budget',
+            align: 'right',
+            xtype: 'costtemplatecolumn',
+            costField: '_rollupDataPreliminaryBudget'
         }];
     },
-    _getColumnCfgs: function(){
+    _getColumnCfgs: function(fields){
+        if (fields){
+            return Ext.Array.map(fields, function(f){ return { dataIndex: f.get('name'), text: f.get('displayName') }; });
+        }
 
-        return [{
+        return  [{
             dataIndex: 'Name',
             text: 'Name',
             flex: 5
         },{
             dataIndex: 'Project',
             text: 'Project',
-            editor: false,
-            isCellEditable: false
+            editor: false
         },{
+            dataIndex: 'PlanEstimate',
+            text: 'Plan Estimate'
+        }, {
             dataIndex: 'PercentDoneByStoryPlanEstimate',
             text: '% Done by Story Points'
-        //},{
-        //    //dataIndex: '_rollupDataPreliminaryBudget',
-        //    text: 'Preliminary Budget',
-        //    align: 'right',
-        //    xtype: 'costtemplatecolumn',
-        //    costField: '_rollupDataPreliminaryBudget'
-        //}, {
-        //    //dataIndex: '_rollupDataTotalCost',
-        //    text: 'Total Projected',
-        //    align: 'right',
-        //    xtype: 'costtemplatecolumn',
-        //    costField: '_rollupDataTotalCost'
-        //},{
-        //    //dataIndex: '_rollupDataActualCost',
-        //    text: "Actual Cost To Date",
-        //    align: 'right',
-        //    xtype: 'costtemplatecolumn',
-        //    costField: '_rollupDataActualCost'
-        //},{
-        //    //dataIndex: '_rollupDataRemainingCost',
-        //    text: "Remaining Cost",
-        //    align: 'right',
-        //    xtype: 'costtemplatecolumn',
-        //    costField: '_rollupDataRemainingCost'
-        //    //renderer: PortfolioItemCostTracking.CostCalculator.costRemainingRenderer
         }];
+
     },
     getSettingsFields: function() {
-        return PortfolioItemCostTracking.Settings.getFields();
+        return PortfolioItemCostTracking.Settings.getFields(this.getSettings());
     },
-    onSettingsUpdate: function (settings){
+    onSettingsUpdate: function(settings){
         this._initializeSettings(settings);
         this._initializeGrid(this.modelNames);
     }
