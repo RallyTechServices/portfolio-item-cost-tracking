@@ -71,7 +71,12 @@ Ext.define('TreeGridContainer', {
          * @event modeltypeschange
          * Fires when the model types of the gridboard are changed.
          */
-            'modeltypeschange'
+            'modeltypeschange',
+        /**
+         * @event updatefields
+         * Fires when the fields are updated via the field picker.
+         */
+            'updatefields'
         ]);
 
         this.on('modeltypeschange', function (gridboard, types) {
@@ -126,7 +131,7 @@ Ext.define('TreeGridContainer', {
         var grid = this.getGrid();
 
         this.currentCustomFilter = filterObj;
-        console.log('grid', grid);
+
         if (grid) {
             this._applyGridFilters(grid, filterObj);
         }
@@ -153,41 +158,87 @@ Ext.define('TreeGridContainer', {
     getAvailableGridBoardHeight: function () {
         return this.getHeight() - this.down('#header').getHeight() - 10;
     },
+    _mergeColumnConfigs: function(newColumns, oldColumns) {
+        var columns  = _.map(newColumns, function(newColumn) {
+            var oldColumn = _.find(oldColumns, {dataIndex: this._getDataIndex(newColumn)});
+            if (oldColumn) {
+                return this._getColumnConfigFromColumn(oldColumn);
+            }
+
+            return newColumn;
+        }, this);
+
+        _.each(oldColumns, function(c){
+            if (c.costField){
+                columns.push(c);
+            }
+        });
+
+        return columns;
+    },
     /**
      * This function is called from the FieldPicker plugin to update the displayed fields
      * In the Gridboard, this calls the reconfigureWithColumns function on the TreeGrid
      * @param fields
      */
     updateFields: function(fields){
-        console.log('updateFields', fields);
-        var grid = this.getGrid();
+        //Strip out the tree field and the rank field because those will be automatically added.
+        var grid = this.getGrid(),
+            new_fields = Ext.Array.filter(fields, function(f){
+                var columnName = f.get('name').toLowerCase();
 
-        columnCfgs = grid._getStatefulColumns(fields);
+                if (grid.store.enableHierarchy && columnName === grid.treeColumnDataIndex.toLowerCase()) {
+                    return false;
+                }
 
-        //Always use the old configuration if we have it.
-        fieldscolumnCfgs = grid._mergeColumnConfigs(columnCfgs, this.columns);
+                if (grid.enableRanking && columnName === grid.rankColumnDataIndex.toLowerCase()) {
+                    return false;
+                }
+                return true;
+        });
 
-        columnCfgs = Ext.Array.merge(columnCfgs, this.gridConfig.customColumns || []);
-
-        console.log('columnCfgs', columnCfgs);
-
-        grid.columnCfgs = columnCfgs;
-
-       // grid.getStore().load();
-
-        //this._buildColumns(true);  //sets grid.columns
-        //this.getStore().fetch = this._buildFetch();
+        this.fireEvent('updatefields',new_fields);
         //
-        //this.on('reconfigure', function() {
-        //    this.headerCt.setSortState();
-        //}, this, {single: true});
-        //this.reconfigure(null, this.columns);
-        //this.columns = this.headerCt.items.getRange();
+        //var grid = this.getGrid();
         //
-        //if (!suspendLoad) {
-        //    this.getStore().load();
-        //}
+        //this.columnCfgs = this.getGrid()._mergeColumnConfigs(fields, this.columns);
 
+        //var fetchConfig = this.getGrid().getStore().fetch || [];
+        //
+        //    if (fetchConfig === true) {
+        //        return fetchConfig;
+        //    }
+        //
+        //    var fetchFields = Ext.create('Rally.ui.grid.data.ColumnFetchBuilder').build({
+        //        grid: this,
+        //        columns: this.columns,
+        //        fetch: fetchConfig
+        //    });
+        //
+        //    return _.union(fetchFields, [this.treeColumnDataIndex]);
+
+
+      //  this._addGrid();
+        //var gridOrBoard = this.cmp.getGridOrBoard();
+        //gridOrBoard.reconfigureWithColumns(fields, false, suspendLoad);
+
+        //this.getGrid().reconfigureWithColumns(fields, false, suspendLoad);
+
+        //columnCfgs = grid._getStatefulColumns(fields);
+        //
+        ////Always use the old configuration if we have it.
+        //fieldscolumnCfgs = grid._mergeColumnConfigs(columnCfgs, this.columns);
+        //
+        //columnCfgs = Ext.Array.merge(columnCfgs, this.gridConfig.customColumns || []);
+        //
+        //console.log('columnCfgs', columnCfgs);
+        //
+        //grid.columnCfgs = columnCfgs;
+
+    },
+    updateStore: function(store){
+        this.gridConfig.store = store;
+        this._addGrid();
     },
     _getGridConfig: function () {
         var context = this.getContext() || Rally.environment.getContext(),
@@ -195,7 +246,7 @@ Ext.define('TreeGridContainer', {
             config = Ext.merge({
                 xtype: 'rallytreegrid',
                 context: context,
-                enableRanking: false, //context.getWorkspace().WorkspaceConfiguration.DragDropRankingEnabled,
+                enableRanking: context.getWorkspace().WorkspaceConfiguration.DragDropRankingEnabled,
                 defaultSortToRank: true,
                 enableBlockedReasonPopover: true,
                 //stateId: this.stateId + '-grid',
@@ -228,8 +279,11 @@ Ext.define('TreeGridContainer', {
         console.log('_getConfiguredFilters', filters.toString);
         return filters;
     },
-
     _addGrid: function () {
+        if (this.getGrid()){
+            this.getGrid().destroy();
+        }
+
         var grid = this.add(this._getGridConfig());
         this.mon(grid, 'afterproxyload', this._onGridLoad, this);
         if (this.currentCustomFilter) {

@@ -28,7 +28,7 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             additionalStoryFetch: ['PlanEstimate'],
             actualUnitsForStoryFn: function(data){
                 if (data.PlanEstimate && Ext.Array.contains(PortfolioItemCostTracking.Settings.completedScheduleStates, data.ScheduleState)) {
-                    return data.PlanEstimate;
+                    return data.PlanEstimate || 0;
                 }
                 return 0;
             },
@@ -67,9 +67,9 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         }
     },
 
-    portfolioItemFetch: ['ObjectID','Parent','Children','UserStories','PreliminaryEstimate','Value'],
-    storyFetch: ['ObjectID','Project','ScheduleState','PortfolioItem'],
-    treeFetch: ['FormattedID','Name','Project','PreliminaryEstimate','PlanEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
+    portfolioItemFetch: ['ObjectID','FormattedID','Parent','Children','UserStories','PreliminaryEstimate','Value'],
+    storyFetch: ['ObjectID','FormattedID','Project','ScheduleState','PortfolioItem'],
+    treeFetch: ['ObjectID','FormattedID','Name','Project','PreliminaryEstimate','PlanEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
 
     notAvailableText: '--',
 
@@ -104,6 +104,9 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             PortfolioItemCostTracking.Settings.selectedCalculationType = 'points';
         }
     },
+    getPortfolioItemTypes: function(){
+        return _.map(this.portfolioItemTypes, function(p){ return p.toLowerCase(); });
+    },
     getCalculationTypeSettings: function(){
         return PortfolioItemCostTracking.Settings.calculationTypes[PortfolioItemCostTracking.Settings.selectedCalculationType] || PortfolioItemCostTracking.Settings.calculationTypes.points;
     },
@@ -136,9 +139,13 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         if (!fetch){
             fetch = [];
         }
+        console.log('Settings.getStoryFetch', fetch);
         fetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.storyFetch);
+        console.log('Settings.getStoryFetch 1', fetch);
 
         fetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getCalculationTypeSettings().additionalStoryFetch);
+        console.log('Settings.getStoryFetch 2', fetch);
+
         return fetch;
     },
     getPortfolioItemFetch: function(fetch){

@@ -5,10 +5,10 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
 
     totalUnits: null,
     actualUnits: null,
-    preliminaryBudget: null,
-    actualCost: 0,
-    remainingCost: 0,
-    totalCost: 0,
+    _rollupDataPreliminaryBudget: null,
+    _rollupDataTotalCost: 0,
+    _rollupDataActualCost: 0,
+    _rollupDataRemainingCost: 0,
     tooltip: undefined,
     projectCosts: undefined,
     /**
@@ -17,66 +17,94 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
     data: undefined,
 
     constructor: function(config){
-        this.data = config.data;
-        this.type = config.type;
+        this.data = config.record.getData();
+        this.type = config.record.get('_type');
 
         this._updateProjectNameAndCostHash(this.data.Project);
 
-        this.preliminaryBudget = this.calculatePreliminaryBudget(this.data);
+        this._rollupDataPreliminaryBudget = this.calculatePreliminaryBudget(this.data);
 
         if ((this.type.toLowerCase() === 'hierarchicalrequirement' )||(this.type.toLowerCase() === 'task')){
-            this.actualCost = this.calculateActualCost(this.data, this.type.toLowerCase());
-            this.totalCost = this.calculateTotalCost(this.data,this.type.toLowerCase());
             this.actualUnits = this.getActualUnits(this.data,this.type.toLowerCase());
             this.totalUnits = this.getTotalUnits(this.data,this.type.toLowerCase());
-            if (this.actualCost === null || this.totalCost === null) {
-                this.remainingCost = null;
+            this._rollupDataActualCost = this.calculateCost(this.data, this.actualUnits);
+            this._rollupDataTotalCost = this.calculateCost(this.data, this.totalUnits);
+            console.log('story',this._rollupDataActualCost,this._rollupDataTotalCost);
+            if (this._rollupDataActualCost === null || this._rollupDataTotalCost === null) {
+                this._rollupDataRemainingCost = null;
             } else {
-                this.remainingCost = this.totalCost - this.actualCost ;
+                this._rollupDataRemainingCost = this._rollupDataTotalCost - this._rollupDataActualCost ;
             }
         }
+
+        //Init the rollup data
+        if (PortfolioItemCostTracking.Utilities.isPortfolioItem(this.type)){
+            this.totalUnits = 0;
+            this._rollupDataTotalCost = 0;
+            this.actualUnits = 0;
+            this._rollupDataActualCost = 0;
+            this._rollupDataRemainingCost = 0;
+        }
     },
-    addChild: function(child){
+    getData: function(field){
+         if (this[field] || this[field] === 0 ) {
+            return this[field];
+        }
+        if (this.data[field] || this.data[field] === 0){
+            return this.data[field];
+        }
+        return null;
+    },
+    addChild: function(record){
+        var childType = record.get('_type'),
+            childData = record.getData();
+
+        if (record.get('_type').toLowerCase() === 'hierarchicalrequirement'){
+            this._updateProjectNameAndCostHash(childData.Project);
+            var total_units = this.getTotalUnits(childData, childType) || 0,
+                actual_units = this.getActualUnits(childData, childType) || 0;
+
+            this.totalUnits = (this.totalUnits || 0) + total_units;
+            this.actualUnits = (this.actualUnits || 0) + actual_units;
+
+            this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + (this.calculateCost(childData, total_units) || 0);
+            this._rollupDataActualCost = (this._rollupDataActualCost || 0) + (this.calculateCost(childData, actual_units) || 0);
+            this._rollupDataRemainingCost = this._rollupDataTotalCost  - this._rollupDataActualCost;
+            console.log('addchild', this._rollupDataRemainingCost);
+
+        }
+
         if (!this.children){
             this.children = [];
         }
-        this.children.push(child);
+        this.children.push(childData.ObjectID);
     },
-    calculateRollupFromChildren: function(){
 
-        var noRollups = ['task','hierarchicalrequirement'];
-        if (Ext.Array.contains(noRollups, this.type.toLowerCase())){
-            return;
-        }
+    /**
+     * addChildRollupData
+     * @param childData
+     */
+    addChildRollupData: function(childData){
+        console.log('addChildRollupData',childData);
+        this.totalUnits = (this.totalUnits || 0) + childData.totalUnits;
+        this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + childData._rollupDataTotalCost ;
 
-        var actual_value = 0,
-            total_value = 0,
-            actual_units = 0,
-            total_units = 0;
+        this.actualUnits = (this.actualUnits || 0) + childData.actualUnits;
+        this._rollupDataActualCost = (this._rollupDataActualCost || 0) + childData._rollupDataActualCost;
 
-        _.each(this.children, function (s) {
-            total_value += this.calculateTotalCost(s, 'hierarchicalrequirement');
-            actual_value += this.calculateActualCost(s, 'hierarchicalrequirement');
-            this._updateProjectNameAndCostHash(s.Project);
-            actual_units += this.getActualUnits(s, 'hierarchicalrequirement');
-            total_units += this.getTotalUnits(s, 'hierarchicalrequirement');
-        }, this);
+        this._rollupDataRemainingCost = (this._rollupDataRemainingCost || 0) + childData._rollupDataRemainingCost;
 
-        this.actualUnits = actual_units;
-        this.totalUnits = total_units;
-
-        this.totalCost = total_value;
-        this.actualCost = actual_value;
-        this.remainingCost = total_value - actual_value;
+        this.projectCosts = Ext.merge(this.projectCosts || {}, childData.projectCosts || {});
     },
     getTooltip: function(){
-        var actual_units = this.actualUnits === null ? '--' :  this.actualUnits,
-            total_units = this.totalUnits === null ? '--' : this.totalUnits;
-
+        var completed  = PortfolioItemCostTracking.Settings.notAvailableText;
+        if ((this.actualUnits !== null) && (this.totalUnits !== null)){
+            completed = Ext.String.format("{0}/{1}", this.actualUnits, this.totalUnits);
+        }
 
         var calc_type_name = PortfolioItemCostTracking.Settings.getCalculationTypeDisplayName();
 
-        var html = Ext.String.format('[{0}] completed {1}/{2}<br/><br/>Cost per unit:<br/>', calc_type_name, actual_units, total_units);
+        var html = Ext.String.format('{0} completed {1}<br/><br/>Cost per unit:<br/>', calc_type_name, completed);
         _.each(this.projectCosts, function(project_cost, project_name){
             html += Ext.String.format('{0} {1}<br/>', PortfolioItemCostTracking.Settings.formatCost(project_cost), project_name);
         });
@@ -96,16 +124,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
         }
         this.projectCosts[name] = cost;
     },
-    calculateActualCost: function(data, modelType){
-        var units = this.getActualUnits(data, modelType);
-        if (units === null){
-            return null;
-        }
-        return units * PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
-    },
-    calculateTotalCost: function(data, modelType){
-
-        var units = this.getTotalUnits(data, modelType);
+    calculateCost: function(data, units){
         if (units === null){
             return null;
         }
