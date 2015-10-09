@@ -58,7 +58,7 @@
 
             this.gridAlwaysSelectedValues = this._modifyFieldCollection(this.gridAlwaysSelectedValues, ['DragAndDropRank'], rankingEnabled);
             this.gridFieldBlackList = this._modifyFieldCollection(this.gridFieldBlackList, ['DragAndDropRank'], !rankingEnabled);
-            this.stateId = this.stateId || this.cmp.getContext().getScopedStateId('shownfields');
+            this.stateId = this.stateId || this.cmp.getFieldListStateId();
 
             var state = Ext.state.Manager.get(this.stateId);
             this._fields = state && state.fields;
@@ -211,10 +211,10 @@
                 return field.get('name');
             });
 
-            this.cmp.updateFields(fields,false,suspendLoad);
+            this.cmp.updateFields(this._fields, false, suspendLoad);
+
             this._updatePickerValue(this._fields);
 
-            this.cmp.fireEvent('viewstatesave', this);
         },
 
         _updatePickerValue: function(fields) {
@@ -224,10 +224,7 @@
         },
 
         _onApply: function(popover) {
-            var fieldPicker = popover.down('rallyfieldpicker'),
-                fields = _.map(fieldPicker.getValue(), function (field) {
-                    return field.get('name');
-                });
+            var fieldPicker = popover.down('rallyfieldpicker');
 
             this.updateFields(fieldPicker.getValue());
 
