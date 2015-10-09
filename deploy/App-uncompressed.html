@@ -66,9 +66,9 @@
             items: [{
                 xtype: 'rallydatefield',
                 itemId: 'dt-start',
-                //stateful: true,
-                //stateId: this.getContext().getScopedStateId('dt-start'),
-                //stateEvents: ['change'],
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('dt-start'),
+                stateEvents: ['change'],
                 margin: '0 10 0 0',
                 value: this.defaults.startDate,
                 padding: 5,
@@ -83,9 +83,9 @@
             },{
                 xtype: 'rallydatefield',
                 itemId: 'dt-end',
-                //stateful: true,
-                //stateId: this.getContext().getScopedStateId('dt-end'),
-                //stateEvents: ['change'],
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('dt-end'),
+                stateEvents: ['change'],
                 margin: '0 10 0 0',
                 labelSeparator: '',
                 labelCls: 'lbl',
@@ -99,19 +99,13 @@
             },{
                 xtype: 'rallyportfolioitemtypecombobox',
                 itemId: 'cb-type',
-                //stateful: true,
-                //stateId: this.getContext().getScopedStateId('cb-type'),
-                //stateEvents: ['change'],
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('cb-type'),
+                stateEvents: ['change'],
                 margin: '0 10 0 0',
                 fieldLabel: 'Portfolio Item Type',
                 labelAlign: 'top',
-                labelCls: 'lbl',
-                listeners: {
-                    scope: this,
-                    ready: function (picker) {
-                        console.log('ready');
-                    }
-                }
+                labelCls: 'lbl'
             }]
         });
         this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
@@ -160,30 +154,7 @@
              this.down('treegridcontainer').destroy();
         }
 
-        var filters = this._getDateFilters();
-        console.log('filters', filters.toString());
-        Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
-            models: modelNames,
-            filters: filters,
-            fetch: PortfolioItemCostTracking.Settings.getTreeFetch(),
-            enableHierarchy: true,
-            listeners: {
-                scope: this,
-                load: this._setRollupData
-            }
-        }).then({
-            scope: this,
-            success: function(store) {
-                console.log('store',store.listeners);
-                store.model.addField({name: '_rollupDataPreliminaryBudget', type: 'auto', defaultValue: null, displayName: 'Preliminary Budget'});
-                store.model.addField({name: '_rollupDataTotalCost', type: 'auto', defaultValue: null, displayName: 'Total Cost'});
-                store.model.addField({name: '_rollupDataRemainingCost', type: 'auto', defaultValue: null, displayName: 'Remaining Cost'});
-                store.model.addField({name: '_rollupDataActualCost', type: 'auto', defaultValue: null, displayName: 'Actual Cost'});
-                store.model.addField({name: '_rollupDataToolTip', type: 'string', defaultValue: null});
-
-                this._updateDisplay(store, modelNames);
-            }
-        });
+        this._updateStore(modelNames);
     },
     getStartDate: function(){
         return this.getDate('dt-start',this.defaults.startDate);
@@ -299,8 +270,7 @@
         }
     },
     _setRollupData: function(store, node, records, success){
-         var rollup_data = this.rollupData;
-        console.log('_setrollupData', store, node, records.length, success);
+        var rollup_data = this.rollupData;
         if (!rollup_data) {
             this.rollupData = new PortfolioItemCostTracking.RollupData();
             rollup_data = this.rollupData;
@@ -311,13 +281,13 @@
         }, this);
 
     },
-    _updateStore: function(fields){
+    _updateStore: function(modelNames){
         var filters = this._getDateFilters();
 
-        var field_names = Ext.Array.map(fields, function(f){ return f.get('name'); });
+        var field_names = [];
 
         Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
-            models: this.modelNames,
+            models: modelNames,
             filters: filters,
             fetch: PortfolioItemCostTracking.Settings.getTreeFetch(field_names),
             enableHierarchy: true,
@@ -328,16 +298,13 @@
         }).then({
             scope: this,
             success: function(store) {
-
                 store.model.addField({name: '_rollupDataPreliminaryBudget', type: 'auto', defaultValue: null, displayName: 'Preliminary Budget'});
                 store.model.addField({name: '_rollupDataTotalCost', type: 'auto', defaultValue: null, displayName: 'Total Cost'});
                 store.model.addField({name: '_rollupDataRemainingCost', type: 'auto', defaultValue: null, displayName: 'Remaining Cost'});
                 store.model.addField({name: '_rollupDataActualCost', type: 'auto', defaultValue: null, displayName: 'Actual Cost'});
                 store.model.addField({name: '_rollupDataToolTip', type: 'string', defaultValue: null});
 
-                this.down('treegridcontainer').gridConfig.columnCfgs = this._getColumnCfgs(fields);
-                this.down('treegridcontainer').updateStore(store);
-                //this._updateDisplay(store, modelNames);
+                this._updateDisplay(store, modelNames);
             }
         });
     },
@@ -347,35 +314,33 @@
         this.add({
             xtype: 'treegridcontainer',
             context: this.getContext(),
-
             gridConfig: {
                 columnCfgs: this._getColumnCfgs(),
-                customColumns: this._getCustomColumns(),
-                store: store
-            //    stateId: this.getContext().getScopedStateId('cost-grid-test11'),
-            //    stateful: true
+                derivedColumns: this._getDerivedColumns(),
+                store: store,
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('cost-tree-grid-11')
             },
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
                 filterControlConfig: {
                     modelNames: modelNames,
-                    //stateful: true,
-                    //stateId: this.getContext().getScopedStateId('cost-grid-filter'),
+                    stateful: true,
+                    stateId: this.getContext().getScopedStateId('cost-grid-filter'),
                     margin: '15px 10px 0px 0px'
                 },
                 showOwnerFilter: true,
                 ownerFilterControlConfig: {
-                    //stateful: true,
-                    //stateId: this.getContext().getScopedStateId('cost-grid-owner-filter'),
+                    stateful: true,
+                    stateId: this.getContext().getScopedStateId('cost-grid-owner-filter'),
                     margin: '15px 10px 0px 0px'
                 }
             },{
                 ptype: 'treegridcontainerfieldpicker',
                 headerPosition: 'left',
                 modelNames: modelNames,
-                alwaysSelectedFields: ['_rollupDataPreliminaryBudget','_rollupDataTotalCost','_rollupDataRemainingCost','_rollupDataActualCost'],
-                //stateful: true,
-                //stateId: this.getContext().getScopedStateId('cost-grid-field-picker'),
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('cost-grid-field-picker'),
                 margin: '15px 0px 10px 10px'
             },{
                 ptype: 'rallygridboardactionsmenu',
@@ -395,42 +360,35 @@
                 beforerender: function(gb){
                     this.addHeader(gb);
                 },
-                updatefields: function(fields){
-                    this._updateStore(fields);
-                },
                 scope: this
             },
             height: this.getHeight()
         });
     },
-    _getCustomColumns: function(){
+    _getDerivedColumns: function(){
         return [{
             text: "Actual Cost To Date",
             align: 'right',
             xtype: 'costtemplatecolumn',
-            costField: '_rollupDataActualCost'
+            dataIndex: '_rollupDataActualCost'
         },{
             text: "Remaining Cost",
             align: 'right',
             xtype: 'costtemplatecolumn',
-            costField: '_rollupDataRemainingCost'
-            //dataIndex: '_rollupDataPreliminaryBudget',
+            dataIndex: '_rollupDataRemainingCost'
         }, {
             text: 'Total Projected',
             align: 'right',
             xtype: 'costtemplatecolumn',
-            costField: '_rollupDataTotalCost'
+            dataIndex: '_rollupDataTotalCost'
         },{
             text: 'Preliminary Budget',
             align: 'right',
             xtype: 'costtemplatecolumn',
-            costField: '_rollupDataPreliminaryBudget'
+            dataIndex: '_rollupDataPreliminaryBudget'
         }];
     },
-    _getColumnCfgs: function(fields){
-        if (fields){
-            return Ext.Array.map(fields, function(f){ return { dataIndex: f.get('name'), text: f.get('displayName') }; });
-        }
+    _getColumnCfgs: function(){
 
         return  [{
             dataIndex: 'Name',
@@ -441,13 +399,12 @@
             text: 'Project',
             editor: false
         },{
-            dataIndex: 'PlanEstimate',
-            text: 'Plan Estimate'
+            dataIndex: 'LeafStoryPlanEstimateTotal',
+            text: 'Plan Estimate Total'
         }, {
             dataIndex: 'PercentDoneByStoryPlanEstimate',
             text: '% Done by Story Points'
         }];
-
     },
     getSettingsFields: function() {
         return PortfolioItemCostTracking.Settings.getFields(this.getSettings());
@@ -529,7 +486,7 @@
 
     portfolioItemFetch: ['ObjectID','FormattedID','Parent','Children','UserStories','PreliminaryEstimate','Value'],
     storyFetch: ['ObjectID','FormattedID','Project','ScheduleState','PortfolioItem'],
-    treeFetch: ['ObjectID','FormattedID','Name','Project','PreliminaryEstimate','PlanEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
+    treeFetch: ['ObjectID','FormattedID','Name','Project','Release','PreliminaryEstimate','PlanEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
 
     notAvailableText: '--',
 
@@ -1119,18 +1076,17 @@
         },
         setRollupData: function (record) {
             var rollup_data = this.getRollupItem(record.get('ObjectID'));
-            console.log('setRollupData', record.get('FormattedID'), rollup_data);
 
             if (rollup_data) {
-                //If we already loaded the data, then use that, we don't want to take the time to reload.
+                 //If we already loaded the data, then use that, we don't want to take the time to reload.
                 this._setDataOnModel(record, rollup_data);
                 this.fireEvent('dataUpdated', rollup_data);
                 return;
             }
-
             this._buildRollupData(record).then({
                 scope: this,
                 success: function (data) {
+                    this._setDataOnModel(record, data);
                     this.fireEvent('dataUpdated', data);
                 },
                 failure: function (msg) {
@@ -1188,7 +1144,7 @@
                     this._fetchTopLevelUserStories([key]).then({
                         scope: this,
                         success: function () {
-                            this._setDataOnModel(record, item);
+                            //this._setDataOnModel(record, item);
                             deferred.resolve(item);
                         },
                         failure: function (operation) {
@@ -1203,7 +1159,7 @@
                             scope: this,
                             success: function () {
                                 this._calculatePortfolioItemRollupData(key);
-                                this._setDataOnModel(record, item);
+                             //   this._setDataOnModel(record, item);
                                 deferred.resolve(item);
                             },
                             failure: function (operation) {
@@ -1214,7 +1170,7 @@
                     }
                 } // end if is the lowest level PI
             } else { // else this is not a PI
-                this._setDataOnModel(record, item);
+               // this._setDataOnModel(record, item);
                 deferred.resolve(this.getRollupItem(key));
             } //end if is a PI
             return deferred;
@@ -1359,7 +1315,7 @@
             this.totalUnits = this.getTotalUnits(this.data,this.type.toLowerCase());
             this._rollupDataActualCost = this.calculateCost(this.data, this.actualUnits);
             this._rollupDataTotalCost = this.calculateCost(this.data, this.totalUnits);
-            console.log('story',this._rollupDataActualCost,this._rollupDataTotalCost);
+            console.log('rollupDataItem constructor',this._rollupDataActualCost,this._rollupDataTotalCost);
             if (this._rollupDataActualCost === null || this._rollupDataTotalCost === null) {
                 this._rollupDataRemainingCost = null;
             } else {
@@ -1985,16 +1941,13 @@ Ext.define('Rally.data.wsapi.ProjectTreeStoreBuilder', {
     extend: 'Ext.grid.column.Template',
     alias: ['widget.costtemplatecolumn'],
 
-    tpl: '',
-    costField: '',
-
     initComponent: function(){
         var me = this;
 
         Ext.QuickTips.init();
 
         me.tpl = new Ext.XTemplate('<tpl><div data-qtip="{[this.getTooltip(values)]}" style="cursor:pointer;">{[this.getCost(values)]}</div></tpl>',{
-            costField: me.costField,
+            costField: me.dataIndex,
             getCost: function(values){
                 if (values[this.costField] === null){
                     return PortfolioItemCostTracking.Settings.notAvailableText;
@@ -2014,7 +1967,6 @@ Ext.define('Rally.data.wsapi.ProjectTreeStoreBuilder', {
         me.callParent(arguments);
     },
     getValue: function(){
-
         return this.values[this.costField] || 0;
     },
     defaultRenderer: function(value, meta, record) {
@@ -2024,30 +1976,93 @@ Ext.define('Rally.data.wsapi.ProjectTreeStoreBuilder', {
     }
 });
 
-Ext.override(Rally.ui.grid.TreeGrid,{
-    _isStatefulColumn: function(columnName) {
-        if (!this.allColumnsStateful) {
-            columnName = columnName.toLowerCase();
+//Ext.override(Rally.ui.grid.TreeGrid,{
+//    //_getStatefulColumns: function(columnCfgs) {
+//    //    return _.filter(columnCfgs, function(columnCfg) {
+//    //        var columnName = Ext.isString(columnCfg) ? columnCfg: columnCfg.dataIndex;
+//    //        return !Ext.isEmpty(columnName) && this._isStatefulColumn(columnName);
+//    //    }, this);
+//    //    //console.log('_getStatefulColumns',columnCfgs);
+//    //    //return columnCfgs;
+//    //},
+//    reconfigureWithColumns: function(columnCfgs, reconfigureExistingColumns, suspendLoad) {
+//        columnCfgs = this._getStatefulColumns(columnCfgs);
+//
+//        if (!reconfigureExistingColumns) {
+//            columnCfgs = this._mergeColumnConfigs(columnCfgs, this.columns);
+//        }
+//
+//        this.columnCfgs = columnCfgs;
+//        console.log('beforebuild', this.columns, this.columnCfgs);
+//        this._buildColumns(true);
+//        console.log('afterbuild', this.columns, this.columnCfgs);
+//        this.getStore().fetch = this._buildFetch();
+//
+//        this.on('reconfigure', function() {
+//            this.headerCt.setSortState();
+//        }, this, {single: true});
+//        this.reconfigure(null, this.columns);
+//        this.columns = this.headerCt.items.getRange();
+//
+//        if (!suspendLoad) {
+//            this.getStore().load();
+//        }
+//    },
 
-            var found = _.filter(this.nonStatefulColumns, function(c){
-                return c.toLowerCase() === columnName;
-            });
-            if (found){
-                return false;
-            }
 
-            if (this.store.enableHierarchy && columnName === this.treeColumnDataIndex.toLowerCase()) {
-                return false;
-            }
-
-            if (this.enableRanking && columnName === this.rankColumnDataIndex.toLowerCase()) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-});
+    //_applyState: function(state) {
+    //    console.log('_applyState',state);
+    //    if (state.columns) {
+    //        // make sure flex is set correctly for column configs saved in a preference
+    //        _.each(state.columns, this._setColumnFlex, this);
+    //        if (this.enableRanking) {
+    //            state.columns = this._removeExistingRankColumn(state.columns);
+    //        }
+    //
+    //        this._applyStatefulColumns(state.columns);
+    //    }
+    //
+    //    if (state.pagingToolbar) {
+    //        var store = this.getStore();
+    //        store.pageSize = state.pagingToolbar.pageSize;
+    //        store.currentPage = state.pagingToolbar.currentPage;
+    //    }
+    //
+    //    if (state.sorters) {
+    //        var sorters = _.transform(state.sorters, function (collection, sorterState) {
+    //            if(Rally.data.Ranker.isRankField(sorterState.property)) {
+    //                sorterState.property = Rally.data.Ranker.getRankField(this.store.model);
+    //            }
+    //
+    //            collection.add(Ext.create('Ext.util.Sorter', {
+    //                property: sorterState.property,
+    //                direction: sorterState.direction
+    //            }));
+    //        }, Ext.create('Ext.util.MixedCollection'), this);
+    //        this.getStore().sorters = sorters;
+    //    }
+    //
+    //    if (state.expandedRowPersistence) {
+    //        this.expandedRowPersistenceState = state.expandedRowPersistence;
+    //    }
+    //
+    //    this.fireEvent('staterestore', this, state);
+    //},
+    //
+    //_applyStatefulColumns: function(columns) {
+    //    console.log('_applyStatefulColumns',columns);
+    //    if (this.alwaysShowDefaultColumns) {
+    //        _.each(this.columnCfgs, function(columnCfg) {
+    //            var dataIndex = _.has(columnCfg.dataIndex) ? columnCfg.dataIndex : columnCfg;
+    //            if (!_.any(columns, {dataIndex: dataIndex})) {
+    //                columns.push(columnCfg);
+    //            }
+    //        });
+    //    }
+    //
+    //    this.columnCfgs = columns;
+    //}
+//});
 
                 
 Ext.define('TreeGridContainerCustomFilterControl', {
@@ -2127,7 +2142,7 @@ Ext.define('TreeGridContainerCustomFilterControl', {
 
             this.gridAlwaysSelectedValues = this._modifyFieldCollection(this.gridAlwaysSelectedValues, ['DragAndDropRank'], rankingEnabled);
             this.gridFieldBlackList = this._modifyFieldCollection(this.gridFieldBlackList, ['DragAndDropRank'], !rankingEnabled);
-            this.stateId = this.stateId || this.cmp.getContext().getScopedStateId('shownfields');
+            this.stateId = this.stateId || this.cmp.getFieldListStateId();
 
             var state = Ext.state.Manager.get(this.stateId);
             this._fields = state && state.fields;
@@ -2280,10 +2295,10 @@ Ext.define('TreeGridContainerCustomFilterControl', {
                 return field.get('name');
             });
 
-            this.cmp.updateFields(fields,false,suspendLoad);
+            this.cmp.updateFields(this._fields, false, suspendLoad);
+
             this._updatePickerValue(this._fields);
 
-            this.cmp.fireEvent('viewstatesave', this);
         },
 
         _updatePickerValue: function(fields) {
@@ -2293,10 +2308,7 @@ Ext.define('TreeGridContainerCustomFilterControl', {
         },
 
         _onApply: function(popover) {
-            var fieldPicker = popover.down('rallyfieldpicker'),
-                fields = _.map(fieldPicker.getValue(), function (field) {
-                    return field.get('name');
-                });
+            var fieldPicker = popover.down('rallyfieldpicker');
 
             this.updateFields(fieldPicker.getValue());
 
@@ -2333,7 +2345,11 @@ Ext.define('TreeGridContainerCustomFilterControl', {
         type: 'auto'
     },
 
+    fieldListStateId: 'shownFields',
+
     currentCustomFilter: [],
+
+
 
     items: [
         {
@@ -2385,9 +2401,14 @@ Ext.define('TreeGridContainerCustomFilterControl', {
             'updatefields'
         ]);
 
+        this.addStateEvents('updatefields','columnmove','columnresize','pagingtoolbarchange','sortchange');
+
         this.on('modeltypeschange', function (gridboard, types) {
             this.modelNames = types;
         }, this);
+    },
+    getFieldListStateId: function(){
+        return this.context.getScopedStateId('shownfields');
     },
     /**
      * Delay the addition of the grid or board until plugins had a chance to modify some state
@@ -2487,77 +2508,25 @@ Ext.define('TreeGridContainerCustomFilterControl', {
      * In the Gridboard, this calls the reconfigureWithColumns function on the TreeGrid
      * @param fields
      */
-    updateFields: function(fields){
-        //Strip out the tree field and the rank field because those will be automatically added.
-        var grid = this.getGrid(),
-            new_fields = Ext.Array.filter(fields, function(f){
-                var columnName = f.get('name').toLowerCase();
+    updateFields: function(fields, reconfigureColumns, suspendLoad){
 
-                if (grid.store.enableHierarchy && columnName === grid.treeColumnDataIndex.toLowerCase()) {
-                    return false;
-                }
+        var updated_fields = Ext.Array.merge(fields, _.pluck(this.gridConfig.derivedColumns, 'dataIndex'));
+        this.getGrid().reconfigureWithColumns(updated_fields, reconfigureColumns, suspendLoad);
 
-                if (grid.enableRanking && columnName === grid.rankColumnDataIndex.toLowerCase()) {
-                    return false;
-                }
-                return true;
-        });
-
-        this.fireEvent('updatefields',new_fields);
-        //
-        //var grid = this.getGrid();
-        //
-        //this.columnCfgs = this.getGrid()._mergeColumnConfigs(fields, this.columns);
-
-        //var fetchConfig = this.getGrid().getStore().fetch || [];
-        //
-        //    if (fetchConfig === true) {
-        //        return fetchConfig;
-        //    }
-        //
-        //    var fetchFields = Ext.create('Rally.ui.grid.data.ColumnFetchBuilder').build({
-        //        grid: this,
-        //        columns: this.columns,
-        //        fetch: fetchConfig
-        //    });
-        //
-        //    return _.union(fetchFields, [this.treeColumnDataIndex]);
-
-
-      //  this._addGrid();
-        //var gridOrBoard = this.cmp.getGridOrBoard();
-        //gridOrBoard.reconfigureWithColumns(fields, false, suspendLoad);
-
-        //this.getGrid().reconfigureWithColumns(fields, false, suspendLoad);
-
-        //columnCfgs = grid._getStatefulColumns(fields);
-        //
-        ////Always use the old configuration if we have it.
-        //fieldscolumnCfgs = grid._mergeColumnConfigs(columnCfgs, this.columns);
-        //
-        //columnCfgs = Ext.Array.merge(columnCfgs, this.gridConfig.customColumns || []);
-        //
-        //console.log('columnCfgs', columnCfgs);
-        //
-        //grid.columnCfgs = columnCfgs;
-
-    },
-    updateStore: function(store){
-        this.gridConfig.store = store;
-        this._addGrid();
     },
     _getGridConfig: function () {
+
         var context = this.getContext() || Rally.environment.getContext(),
-            columnCfgs = Ext.Array.merge(this.gridConfig.columnCfgs || [], this.gridConfig.customColumns || []),
+            customColumns = this.gridConfig.derivedColumns || [],
+            columnCfgs = Ext.Array.merge(this.gridConfig.columnCfgs || [], customColumns),
             config = Ext.merge({
                 xtype: 'rallytreegrid',
                 context: context,
                 enableRanking: context.getWorkspace().WorkspaceConfiguration.DragDropRankingEnabled,
                 defaultSortToRank: true,
                 enableBlockedReasonPopover: true,
-                //stateId: this.stateId + '-grid',
-                //stateful: true,
                 height: this.getAvailableGridBoardHeight()
+
             }, this.gridConfig);
 
             config.columnCfgs = columnCfgs;
@@ -2567,6 +2536,7 @@ Ext.define('TreeGridContainerCustomFilterControl', {
         }
         return config;
     },
+
     _getConfiguredFilters: function (extraFilters, types) {
         var filters = _.compact(Ext.Array.merge(
             this.getGrid().store.filters,
@@ -2574,18 +2544,10 @@ Ext.define('TreeGridContainerCustomFilterControl', {
             this.gridConfig && this.gridConfig.storeConfig && this.gridConfig.storeConfig.filters,
             extraFilters));
 
-
-        console.log('_getConfiguredFilters',filters.toString(),
-            _.isFunction(this.getModels()[0].getArtifactComponentModel));
-
-        // don't do this if not artifact model or we are using filter collection
-        //if ( _.isFunction(this.getModels()[0].getArtifactComponentModel)) {
-        //    filters = Rally.util.Filter.removeNonapplicableTypeSpecificFilters(filters, types, this.getModels()[0]);
-        //}
-        console.log('_getConfiguredFilters', filters.toString);
         return filters;
     },
     _addGrid: function () {
+
         if (this.getGrid()){
             this.getGrid().destroy();
         }
@@ -2602,7 +2564,6 @@ Ext.define('TreeGridContainerCustomFilterControl', {
             grid.store.parentTypes = filterObj.types;
         }
         grid.store.clearFilter(true);
-        console.log('applied filters', this._getConfiguredFilters(filterObj.filters || [], filterObj.types || []));
         grid.store.filter(this._getConfiguredFilters(filterObj.filters || [], filterObj.types || []));
     },
     _onGridLoad: function () {

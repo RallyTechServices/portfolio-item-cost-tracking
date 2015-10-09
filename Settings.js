@@ -69,7 +69,7 @@ Ext.define('PortfolioItemCostTracking.Settings', {
 
     portfolioItemFetch: ['ObjectID','FormattedID','Parent','Children','UserStories','PreliminaryEstimate','Value'],
     storyFetch: ['ObjectID','FormattedID','Project','ScheduleState','PortfolioItem'],
-    treeFetch: ['ObjectID','FormattedID','Name','Project','PreliminaryEstimate','PlanEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
+    treeFetch: ['ObjectID','FormattedID','Name','Project','Release','PreliminaryEstimate','PlanEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
 
     notAvailableText: '--',
 

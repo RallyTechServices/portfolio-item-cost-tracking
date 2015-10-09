@@ -29,7 +29,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
             this.totalUnits = this.getTotalUnits(this.data,this.type.toLowerCase());
             this._rollupDataActualCost = this.calculateCost(this.data, this.actualUnits);
             this._rollupDataTotalCost = this.calculateCost(this.data, this.totalUnits);
-            console.log('story',this._rollupDataActualCost,this._rollupDataTotalCost);
+            console.log('rollupDataItem constructor',this._rollupDataActualCost,this._rollupDataTotalCost);
             if (this._rollupDataActualCost === null || this._rollupDataTotalCost === null) {
                 this._rollupDataRemainingCost = null;
             } else {
