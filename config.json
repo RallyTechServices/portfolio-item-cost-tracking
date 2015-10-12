@@ -11,7 +11,7 @@
       "RollupData.js",
       "RollupDataItem.js",
       "ProjectPicker.js",
-      "overrides.js",
+      "CostTemplateColumn.js",
       "PluginTreeGridContainerCustomFilter.js",
       "PluginTreeGridContainerFieldPicker.js",
       "TreeGridContainer.js",

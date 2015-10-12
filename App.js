@@ -300,7 +300,7 @@ Ext.define('PortfolioItemCostTracking', {
                 derivedColumns: this._getDerivedColumns(),
                 store: store,
                 stateful: true,
-                stateId: this.getContext().getScopedStateId('cost-tree-grid-11')
+                stateId: this.getContext().getScopedStateId('cost-tree-grid-12')
             },
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
