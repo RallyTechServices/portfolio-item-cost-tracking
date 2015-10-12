@@ -13,7 +13,8 @@ Ext.define('PortfolioItemCostTracking', {
             selectedCalculationType: 'points',
             normalizedCostPerUnit: 1000,
             projectCostPerUnit: {},
-            currencySign: '$'
+            currencySign: '$',
+            preliminaryBudgetField: 'PreliminaryEstimate'
         }
     },
 
@@ -127,6 +128,8 @@ Ext.define('PortfolioItemCostTracking', {
         }
         PortfolioItemCostTracking.Settings.projectCostPerUnit = project_cpu;
 
+        PortfolioItemCostTracking.Settings.preliminaryBudgetField = settings.preliminaryBudgetField;
+
         PortfolioItemCostTracking.Settings.setCalculationType(settings.selectedCalculationType);
     },
      _initializeGrid: function(modelNames){
@@ -175,32 +178,19 @@ Ext.define('PortfolioItemCostTracking', {
         }
     },
     _showExportMenu: function () {
+        var columnCfgs = this.down('treegridcontainer').getGrid().columnCfgs,
+            additionalFields = _.pluck(columnCfgs, 'dataIndex');
+
         var filters = this._getDateFilters(),//Todo: Add custom filter settings
-            fetch = PortfolioItemCostTracking.Settings.getTreeFetch(),
-            root_model = this.modelNames[0],
-            export_columns = this._getExportColumns(); //Todo: add fetch settings
+            fetch = PortfolioItemCostTracking.Settings.getTreeFetch(additionalFields),
+            root_model = this.modelNames[0];
 
-         PortfolioItemCostTracking.Utilities.fetchExportData(root_model,filters,fetch,export_columns).then({
+         var exporter = new PortfolioItemCostTracking.Exporter();
+        exporter.fetchExportData(root_model,filters,fetch,columnCfgs).then({
             scope: this,
-            success: function(results){
-                console.log('success',results);
-                var cols = this._getFormattedIDExportColumns(root_model).concat(export_columns);
-                var rows = [];
-                _.each(results, function(row_hash){
-                    var row = [];
-                    _.each(cols, function(c){
-                        var col_idx = c;
-                        if (Ext.isObject(c)){
-                            col_idx = c.dataIndex || c.costField;
-                        }
-                        console.log(c,row_hash);
-                        row.push(row_hash[col_idx] || null);
-                    });
-                    rows.push(row.join(','));
-                });
-                var csv = rows.join("\r\n");
-               console.log('csv',csv);
-
+            success: function(csv){
+                var filename = Ext.String.format("export-{0}.csv",Ext.Date.format(new Date(),"Y-m-d-h-i-s"));
+                exporter.saveCSVToFile(csv, filename);
             },
             failure: function(msg){
                 console.log('failure',msg);
@@ -218,7 +208,7 @@ Ext.define('PortfolioItemCostTracking', {
         return cols;
     },
     _getExportColumns: function(){
-        var cols = this._getColumnCfgs().concat(this._getCustomColumns());
+        var cols = this._getColumnCfgs().concat(this._getDerivedColumns());
         return cols;
         //Todo - order columns in same order as grid...
     },

@@ -15,7 +15,9 @@
       "PluginTreeGridContainerCustomFilter.js",
       "PluginTreeGridContainerFieldPicker.js",
       "TreeGridContainer.js",
-      "Utilities.js"
+      "Utilities.js",
+      "Exporter.js",
+      "NumberFieldComboBox.js"
    ],
    "css": [
       "app.css"
