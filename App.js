@@ -27,19 +27,20 @@ Ext.define('PortfolioItemCostTracking', {
         //ToDO: check for RPM?
 
         //Initialize the filter values...
-        var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
-            state_val = state ? state.value : null;
+        //var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
+        //    state_val = state ? state.value : null;
 
 
        Deft.Promise.all([
             PortfolioItemCostTracking.WsapiToolbox.fetchPortfolioItemTypes(),
-            PortfolioItemCostTracking.WsapiToolbox.fetchDoneStates(),
-            PortfolioItemCostTracking.WsapiToolbox.fetchModelTypePathByTypeDefinition(state_val)
+            PortfolioItemCostTracking.WsapiToolbox.fetchDoneStates()
+         //   PortfolioItemCostTracking.WsapiToolbox.fetchModelTypePathByTypeDefinition(state_val)
         ]).then({
             scope: this,
             success: function(results){
                 this._initializeSettings(this.getSettings(), results[1], results[0]);
-                this._createPickers(state_val);
+               // state_val = state_val || results[0][0]; // set the state for the pi type to the lowest level PI if its not been set yet
+                this._createPickers();
             },
             failure: function(msg){
                 Rally.ui.notify.Notifier.showError({message: msg});
@@ -50,6 +51,7 @@ Ext.define('PortfolioItemCostTracking', {
 
         var startDate = this.getStartDate(),
             endDate = this.getEndDate();
+
 
         this.fixedHeader = Ext.create('Ext.container.Container',{
             itemId: 'header-controls',
@@ -108,13 +110,18 @@ Ext.define('PortfolioItemCostTracking', {
 
         this.fixedHeader.down('#dt-start').setValue(startDate);
         this.fixedHeader.down('#dt-end').setValue(endDate);
-        this.fixedHeader.down('#cb-type').setValue(piType);
+
     },
     _attachListeners: function(){
         if (this.fixedHeader && this.fixedHeader.down('#cb-type') &&
             this.fixedHeader.down('#dt-start') && this.fixedHeader.down('#dt-end')){
 
-                this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
+            var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
+                state_val = state ? state.value : null;
+
+            this.fixedHeader.down('#cb-type').setValue(state_val);
+
+            this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
                 this.fixedHeader.down('#dt-start').on('change', this.updateStoreFilters, this);
                 this.fixedHeader.down('#dt-end').on('change', this.updateStoreFilters, this);
                 this._onTypeChange(this.fixedHeader.down('#cb-type'));
@@ -316,7 +323,7 @@ Ext.define('PortfolioItemCostTracking', {
     },
     _updateDisplay: function(store, modelNames){
         var me = this;
-        console.log('this._getDateFilters',this._getDateFilters());
+
         this.add({
             xtype: 'treegridcontainer',
             context: this.getContext(),
