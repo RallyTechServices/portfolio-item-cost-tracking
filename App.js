@@ -266,7 +266,7 @@ Ext.define('PortfolioItemCostTracking', {
         return filter_planned.or(filter_actual);
     },
     updateStoreFilters: function(){
-        console.log('UpdateStoreFilters');
+
         if (this.down('treegridcontainer')){
             this.down('treegridcontainer').storeConfig.filters = this._getDateFilters();
             this.down('treegridcontainer').applyCustomFilter(this.down('treegridcontainer').currentCustomFilter);
@@ -286,7 +286,7 @@ Ext.define('PortfolioItemCostTracking', {
     },
     _updateStore: function(modelNames){
         var filters = this._getDateFilters();
-   
+
         var field_names = [];
 
         if (filters === null){
@@ -294,7 +294,7 @@ Ext.define('PortfolioItemCostTracking', {
         }
         Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
             models: modelNames,
-            filters: filters,
+            //filters: filters,
             fetch: PortfolioItemCostTracking.Settings.getTreeFetch(field_names),
             enableHierarchy: true,
             listeners: {
@@ -316,7 +316,7 @@ Ext.define('PortfolioItemCostTracking', {
     },
     _updateDisplay: function(store, modelNames){
         var me = this;
-
+        console.log('this._getDateFilters',this._getDateFilters());
         this.add({
             xtype: 'treegridcontainer',
             context: this.getContext(),
@@ -324,11 +324,12 @@ Ext.define('PortfolioItemCostTracking', {
                 columnCfgs: this._getColumnCfgs(),
                 derivedColumns: this._getDerivedColumns(),
                 store: store,
-                storeConfig: {
-                    filters: this._getDateFilters()
-                },
+
                 stateful: true,
                 stateId: this.getContext().getScopedStateId('cost-tree-grid')
+            },
+            storeConfig: {
+                filters: this._getDateFilters()
             },
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
