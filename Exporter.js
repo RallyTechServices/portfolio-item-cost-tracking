@@ -103,8 +103,7 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
         var csvArray = [],
             delimiter = ",",
             rowDelimiter = "\r\n",
-            re = new RegExp(delimiter + '|\r|\n','g'),
-            re_dq = new RegExp("\"");
+            re = new RegExp(delimiter + '|\"|\r|\n','g');
 
         var column_keys = _.pluck(columns, 'dataIndex'),
             column_headers = _.pluck(columns, 'text');
@@ -116,11 +115,9 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
             Ext.Array.each(column_keys, function(key){
                 var val = obj[key];
                 if (val){
-                    if (re_dq.test(val)){
-                        val = val.replace('\"','\"\"');
-                    }
                     if (re.test(val)){ //enclose in double quotes if we have the delimiters
-                        val = Ext.String.format('"{0}"',obj[key]);
+                        val = val.replace('"','\"\"');
+                        val = Ext.String.format("\"{0}\"",val);
                     }
                 }
                data.push(val);

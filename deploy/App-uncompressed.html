@@ -48,14 +48,17 @@
             scope: this,
             success: function(results){
                 this._initializeSettings(this.getSettings(), results[1], results[0]);
-                this._createPickers();
+                this._createPickers(state_val);
             },
             failure: function(msg){
                 Rally.ui.notify.Notifier.showError({message: msg});
             }
         });
     },
-    _createPickers: function(){
+    _createPickers: function(piType){
+
+        var startDate = this.getStartDate(),
+            endDate = this.getEndDate();
 
         this.fixedHeader = Ext.create('Ext.container.Container',{
             itemId: 'header-controls',
@@ -71,7 +74,6 @@
                 stateId: this.getContext().getScopedStateId('dt-start'),
                 stateEvents: ['change'],
                 margin: '0 10 0 0',
-                value: this.defaults.startDate,
                 padding: 5,
                 fieldLabel: 'Start Date',
                 labelSeparator: '',
@@ -79,7 +81,7 @@
                 labelAlign: 'top',
                 listeners: {
                     scope: this,
-                    change: this.updateStoreFilters
+                    ready: this._attachListeners
                 }
             },{
                 xtype: 'rallydatefield',
@@ -90,12 +92,11 @@
                 margin: '0 10 0 0',
                 labelSeparator: '',
                 labelCls: 'lbl',
-                value: this.defaults.endDate,
                 fieldLabel: 'End Date',
                 labelAlign: 'top',
                 listeners: {
                     scope: this,
-                    change: this.updateStoreFilters
+                    ready: this._attachListeners
                 }
             },{
                 xtype: 'rallyportfolioitemtypecombobox',
@@ -106,10 +107,27 @@
                 margin: '0 10 0 0',
                 fieldLabel: 'Portfolio Item Type',
                 labelAlign: 'top',
-                labelCls: 'lbl'
+                labelCls: 'lbl',
+                listeners: {
+                    scope: this,
+                    ready: this._attachListeners
+                }
             }]
         });
-        this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
+
+        this.fixedHeader.down('#dt-start').setValue(startDate);
+        this.fixedHeader.down('#dt-end').setValue(endDate);
+        this.fixedHeader.down('#cb-type').setValue(piType);
+    },
+    _attachListeners: function(){
+        if (this.fixedHeader && this.fixedHeader.down('#cb-type') &&
+            this.fixedHeader.down('#dt-start') && this.fixedHeader.down('#dt-end')){
+
+                this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
+                this.fixedHeader.down('#dt-start').on('change', this.updateStoreFilters, this);
+                this.fixedHeader.down('#dt-end').on('change', this.updateStoreFilters, this);
+                this._onTypeChange(this.fixedHeader.down('#cb-type'));
+        }
     },
     _onTypeChange: function(piPicker){
         var piType = piPicker.getRecord().get('TypePath');
@@ -166,11 +184,11 @@
         return this.getDate('dt-end',this.defaults.endDate);
     },
     getDate: function(itemId, defaultDate){
-        var dt = defaultDate,
+        var dt = defaultDate || null,
             cmpId = '#' + itemId;
 
-        if (this.down(cmpId)){
-            dt = this.down(cmpId).getValue();
+        if (this.fixedHeader && this.fixedHeader.down(cmpId)){
+            dt = this.fixedHeader.down(cmpId).getValue();
         } else {
             var state = Ext.state.Manager.get(this.getContext().getScopedStateId(itemId));
             if (state && state.value){
@@ -206,54 +224,58 @@
             }
         });
     },
-    _getFormattedIDExportColumns: function(rootModel){
-        var cols = [];
-        var pi_types = PortfolioItemCostTracking.Settings.getPortfolioItemTypes();
-        var idx = _.indexOf(pi_types,rootModel.toLowerCase());
-        if (idx >= 0){
-            cols = pi_types.slice(idx);
-        }
-        cols.push('hierarchicalrequirement');
-        return cols;
-    },
-    _getExportColumns: function(){
-        var cols = this._getColumnCfgs().concat(this._getDerivedColumns());
-        return cols;
-        //Todo - order columns in same order as grid...
-    },
+
     _getDateFilters: function(){
 
         var start_date = this.getStartDate(),
             end_date = this.getEndDate();
 
-        var filter_actual = [{
-            property: 'ActualEndDate',
-            operator: '>=',
-            value: Rally.util.DateTime.toIsoString(start_date)
-        },{
-            property: 'ActualEndDate',
-            operator: '<',
-            value: Rally.util.DateTime.toIsoString(end_date)
-        }];
-        filter_actual = Rally.data.wsapi.Filter.and(filter_actual);
+        if(start_date === null && end_date === null){
+            return null;
+        }
 
-        var filter_planned = [{
-            property: 'ActualEndDate',
-            value: null
-        },{
-            property: 'PlannedEndDate',
-            operator: '<',
-            value: Rally.util.DateTime.toIsoString(end_date)
-        },{
-            property: 'PlannedEndDate',
-            operator: '>=',
-            value: Rally.util.DateTime.toIsoString(start_date)
-        }];
-        filter_planned = Rally.data.wsapi.Filter.and(filter_planned);
+        var filter_actual = [],
+            filter_planned = [{
+                property: 'ActualEndDate',
+                value: null
+            }];
 
-        return filter_actual.or(filter_planned);
+        if (start_date){
+            filter_actual.push({
+                property: 'ActualEndDate',
+                operator: '>=',
+                value: Rally.util.DateTime.toIsoString(start_date)
+            });
+            filter_planned.push({
+                property: 'PlannedEndDate',
+                operator: '>=',
+                value: Rally.util.DateTime.toIsoString(start_date)
+            });
+        }
+
+        if (end_date){
+            filter_actual.push({
+                property: 'ActualEndDate',
+                operator: '<',
+                value: Rally.util.DateTime.toIsoString(end_date)
+            });
+            filter_planned.push({
+                property: 'PlannedEndDate',
+                operator: '<',
+                value: Rally.util.DateTime.toIsoString(end_date)
+            });
+        }
+
+        if (filter_actual.length > 1){
+            filter_actual = Rally.data.wsapi.Filter.and(filter_actual);
+        }
+        if (filter_planned.length > 1){
+            filter_planned = Rally.data.wsapi.Filter.and(filter_planned);
+        }
+        return filter_planned.or(filter_actual);
     },
     updateStoreFilters: function(){
+        console.log('UpdateStoreFilters');
         if (this.down('treegridcontainer')){
             this.down('treegridcontainer').storeConfig.filters = this._getDateFilters();
             this.down('treegridcontainer').applyCustomFilter(this.down('treegridcontainer').currentCustomFilter);
@@ -273,9 +295,12 @@
     },
     _updateStore: function(modelNames){
         var filters = this._getDateFilters();
-
+   
         var field_names = [];
 
+        if (filters === null){
+            return;
+        }
         Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
             models: modelNames,
             filters: filters,
@@ -308,8 +333,11 @@
                 columnCfgs: this._getColumnCfgs(),
                 derivedColumns: this._getDerivedColumns(),
                 store: store,
+                storeConfig: {
+                    filters: this._getDateFilters()
+                },
                 stateful: true,
-                stateId: this.getContext().getScopedStateId('cost-tree-grid-12')
+                stateId: this.getContext().getScopedStateId('cost-tree-grid')
             },
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
@@ -2607,8 +2635,7 @@ Ext.define('TreeGridContainerCustomFilterControl', {
         var csvArray = [],
             delimiter = ",",
             rowDelimiter = "\r\n",
-            re = new RegExp(delimiter + '|\r|\n','g'),
-            re_dq = new RegExp("\"");
+            re = new RegExp(delimiter + '|\"|\r|\n','g');
 
         var column_keys = _.pluck(columns, 'dataIndex'),
             column_headers = _.pluck(columns, 'text');
@@ -2620,11 +2647,9 @@ Ext.define('TreeGridContainerCustomFilterControl', {
             Ext.Array.each(column_keys, function(key){
                 var val = obj[key];
                 if (val){
-                    if (re_dq.test(val)){
-                        val = val.replace('\"','\"\"');
-                    }
                     if (re.test(val)){ //enclose in double quotes if we have the delimiters
-                        val = Ext.String.format('"{0}"',obj[key]);
+                        val = val.replace('"','\"\"');
+                        val = Ext.String.format("\"{0}\"",val);
                     }
                 }
                data.push(val);
