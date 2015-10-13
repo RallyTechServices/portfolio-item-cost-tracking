@@ -156,10 +156,13 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
         return null;
     },
     calculatePreliminaryBudget: function(data){
+        var preliminaryBudgetField = PortfolioItemCostTracking.Settings.preliminaryBudgetField;
 
-        if (data && data.PreliminaryEstimate && data.PreliminaryEstimate.Value){
+        if (data && data[preliminaryBudgetField]){
+            //We need to do this in case we are using hte PreliminaryEstimate field, which is an object
+            var val = data[preliminaryBudgetField].Value || data[preliminaryBudgetField];
             var cpu = PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
-            return cpu * data.PreliminaryEstimate.Value;
+            return cpu * val;
         }
         return null;
     }

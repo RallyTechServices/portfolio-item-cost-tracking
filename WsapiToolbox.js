@@ -125,7 +125,7 @@ Ext.define('PortfolioItemCostTracking.WsapiToolbox', {
 
         var store = Ext.create('Rally.data.wsapi.Store', {
             model: 'TypeDefinition',
-            fetch: ['TypePath', 'Ordinal'],
+            fetch: ['TypePath', 'Ordinal','Name'],
             filters: [{
                 property: 'TypePath',
                 operator: 'contains',
@@ -143,7 +143,7 @@ Ext.define('PortfolioItemCostTracking.WsapiToolbox', {
                     _.each(records, function(d){
                         //Use ordinal to make sure the lowest level portfolio item type is the first in the array.
                         var idx = Number(d.get('Ordinal'));
-                        portfolioItemTypes[idx] = d.get('TypePath');
+                        portfolioItemTypes[idx] = { typePath: d.get('TypePath'), name: d.get('Name') };
                         //portfolioItemTypes.reverse();
                     });
                     deferred.resolve(portfolioItemTypes);

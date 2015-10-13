@@ -239,6 +239,8 @@ Ext.define('TreeGridContainer', {
         if (this.currentCustomFilter) {
             this._applyGridFilters(grid, this.currentCustomFilter);
         }
+
+
        return grid;
     },
     _applyGridFilters: function (grid, filterObj) {
@@ -249,6 +251,13 @@ Ext.define('TreeGridContainer', {
         grid.store.filter(this._getConfiguredFilters(filterObj.filters || [], filterObj.types || []));
     },
     _onGridLoad: function () {
+
+        //var view = this.getGrid().getView(); //Get the view of the treePanel
+        //var feature = view.getFeature(0);   //Get the grouping feature (in our case it is the only child...)
+        //var view2 = feature.view;
+        //var store = view2.store;
+        //store.group('Release');
+
         this.fireEvent('load', this);
 
         if (Rally.BrowserTest) {

@@ -36,12 +36,3 @@ Ext.define('Ext.CostTemplate', {
         return this.tpl.apply(data);
     }
 });
-
-//Ext.override(Rally.ui.grid.TreeGrid,{
-//    _setupFeatures: function(config) {
-//        return [];
-//        return [{
-//            ftype: 'grouping'
-//        }];
-//    }
-//});

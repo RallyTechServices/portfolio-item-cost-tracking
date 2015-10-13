@@ -22,7 +22,8 @@
             selectedCalculationType: 'points',
             normalizedCostPerUnit: 1000,
             projectCostPerUnit: {},
-            currencySign: '$'
+            currencySign: '$',
+            preliminaryBudgetField: 'PreliminaryEstimate'
         }
     },
 
@@ -47,14 +48,17 @@
             scope: this,
             success: function(results){
                 this._initializeSettings(this.getSettings(), results[1], results[0]);
-                this._createPickers();
+                this._createPickers(state_val);
             },
             failure: function(msg){
                 Rally.ui.notify.Notifier.showError({message: msg});
             }
         });
     },
-    _createPickers: function(){
+    _createPickers: function(piType){
+
+        var startDate = this.getStartDate(),
+            endDate = this.getEndDate();
 
         this.fixedHeader = Ext.create('Ext.container.Container',{
             itemId: 'header-controls',
@@ -70,7 +74,6 @@
                 stateId: this.getContext().getScopedStateId('dt-start'),
                 stateEvents: ['change'],
                 margin: '0 10 0 0',
-                value: this.defaults.startDate,
                 padding: 5,
                 fieldLabel: 'Start Date',
                 labelSeparator: '',
@@ -78,7 +81,7 @@
                 labelAlign: 'top',
                 listeners: {
                     scope: this,
-                    change: this.updateStoreFilters
+                    ready: this._attachListeners
                 }
             },{
                 xtype: 'rallydatefield',
@@ -89,12 +92,11 @@
                 margin: '0 10 0 0',
                 labelSeparator: '',
                 labelCls: 'lbl',
-                value: this.defaults.endDate,
                 fieldLabel: 'End Date',
                 labelAlign: 'top',
                 listeners: {
                     scope: this,
-                    change: this.updateStoreFilters
+                    ready: this._attachListeners
                 }
             },{
                 xtype: 'rallyportfolioitemtypecombobox',
@@ -105,10 +107,27 @@
                 margin: '0 10 0 0',
                 fieldLabel: 'Portfolio Item Type',
                 labelAlign: 'top',
-                labelCls: 'lbl'
+                labelCls: 'lbl',
+                listeners: {
+                    scope: this,
+                    ready: this._attachListeners
+                }
             }]
         });
-        this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
+
+        this.fixedHeader.down('#dt-start').setValue(startDate);
+        this.fixedHeader.down('#dt-end').setValue(endDate);
+        this.fixedHeader.down('#cb-type').setValue(piType);
+    },
+    _attachListeners: function(){
+        if (this.fixedHeader && this.fixedHeader.down('#cb-type') &&
+            this.fixedHeader.down('#dt-start') && this.fixedHeader.down('#dt-end')){
+
+                this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
+                this.fixedHeader.down('#dt-start').on('change', this.updateStoreFilters, this);
+                this.fixedHeader.down('#dt-end').on('change', this.updateStoreFilters, this);
+                this._onTypeChange(this.fixedHeader.down('#cb-type'));
+        }
     },
     _onTypeChange: function(piPicker){
         var piType = piPicker.getRecord().get('TypePath');
@@ -135,6 +154,8 @@
             project_cpu = Ext.JSON.decode(project_cpu);
         }
         PortfolioItemCostTracking.Settings.projectCostPerUnit = project_cpu;
+
+        PortfolioItemCostTracking.Settings.preliminaryBudgetField = settings.preliminaryBudgetField;
 
         PortfolioItemCostTracking.Settings.setCalculationType(settings.selectedCalculationType);
     },
@@ -163,11 +184,11 @@
         return this.getDate('dt-end',this.defaults.endDate);
     },
     getDate: function(itemId, defaultDate){
-        var dt = defaultDate,
+        var dt = defaultDate || null,
             cmpId = '#' + itemId;
 
-        if (this.down(cmpId)){
-            dt = this.down(cmpId).getValue();
+        if (this.fixedHeader && this.fixedHeader.down(cmpId)){
+            dt = this.fixedHeader.down(cmpId).getValue();
         } else {
             var state = Ext.state.Manager.get(this.getContext().getScopedStateId(itemId));
             if (state && state.value){
@@ -184,86 +205,77 @@
         }
     },
     _showExportMenu: function () {
+        var columnCfgs = this.down('treegridcontainer').getGrid().columnCfgs,
+            additionalFields = _.pluck(columnCfgs, 'dataIndex');
+
         var filters = this._getDateFilters(),//Todo: Add custom filter settings
-            fetch = PortfolioItemCostTracking.Settings.getTreeFetch(),
-            root_model = this.modelNames[0],
-            export_columns = this._getExportColumns(); //Todo: add fetch settings
+            fetch = PortfolioItemCostTracking.Settings.getTreeFetch(additionalFields),
+            root_model = this.modelNames[0];
 
-         PortfolioItemCostTracking.Utilities.fetchExportData(root_model,filters,fetch,export_columns).then({
+         var exporter = new PortfolioItemCostTracking.Exporter();
+        exporter.fetchExportData(root_model,filters,fetch,columnCfgs).then({
             scope: this,
-            success: function(results){
-                console.log('success',results);
-                var cols = this._getFormattedIDExportColumns(root_model).concat(export_columns);
-                var rows = [];
-                _.each(results, function(row_hash){
-                    var row = [];
-                    _.each(cols, function(c){
-                        var col_idx = c;
-                        if (Ext.isObject(c)){
-                            col_idx = c.dataIndex || c.costField;
-                        }
-                        console.log(c,row_hash);
-                        row.push(row_hash[col_idx] || null);
-                    });
-                    rows.push(row.join(','));
-                });
-                var csv = rows.join("\r\n");
-               console.log('csv',csv);
-
+            success: function(csv){
+                var filename = Ext.String.format("export-{0}.csv",Ext.Date.format(new Date(),"Y-m-d-h-i-s"));
+                exporter.saveCSVToFile(csv, filename);
             },
             failure: function(msg){
                 console.log('failure',msg);
             }
         });
     },
-    _getFormattedIDExportColumns: function(rootModel){
-        var cols = [];
-        var pi_types = PortfolioItemCostTracking.Settings.getPortfolioItemTypes();
-        var idx = _.indexOf(pi_types,rootModel.toLowerCase());
-        if (idx >= 0){
-            cols = pi_types.slice(idx);
-        }
-        cols.push('hierarchicalrequirement');
-        return cols;
-    },
-    _getExportColumns: function(){
-        var cols = this._getColumnCfgs().concat(this._getCustomColumns());
-        return cols;
-        //Todo - order columns in same order as grid...
-    },
+
     _getDateFilters: function(){
 
         var start_date = this.getStartDate(),
             end_date = this.getEndDate();
 
-        var filter_actual = [{
-            property: 'ActualEndDate',
-            operator: '>=',
-            value: Rally.util.DateTime.toIsoString(start_date)
-        },{
-            property: 'ActualEndDate',
-            operator: '<',
-            value: Rally.util.DateTime.toIsoString(end_date)
-        }];
-        filter_actual = Rally.data.wsapi.Filter.and(filter_actual);
+        if(start_date === null && end_date === null){
+            return null;
+        }
 
-        var filter_planned = [{
-            property: 'ActualEndDate',
-            value: null
-        },{
-            property: 'PlannedEndDate',
-            operator: '<',
-            value: Rally.util.DateTime.toIsoString(end_date)
-        },{
-            property: 'PlannedEndDate',
-            operator: '>=',
-            value: Rally.util.DateTime.toIsoString(start_date)
-        }];
-        filter_planned = Rally.data.wsapi.Filter.and(filter_planned);
+        var filter_actual = [],
+            filter_planned = [{
+                property: 'ActualEndDate',
+                value: null
+            }];
 
-        return filter_actual.or(filter_planned);
+        if (start_date){
+            filter_actual.push({
+                property: 'ActualEndDate',
+                operator: '>=',
+                value: Rally.util.DateTime.toIsoString(start_date)
+            });
+            filter_planned.push({
+                property: 'PlannedEndDate',
+                operator: '>=',
+                value: Rally.util.DateTime.toIsoString(start_date)
+            });
+        }
+
+        if (end_date){
+            filter_actual.push({
+                property: 'ActualEndDate',
+                operator: '<',
+                value: Rally.util.DateTime.toIsoString(end_date)
+            });
+            filter_planned.push({
+                property: 'PlannedEndDate',
+                operator: '<',
+                value: Rally.util.DateTime.toIsoString(end_date)
+            });
+        }
+
+        if (filter_actual.length > 1){
+            filter_actual = Rally.data.wsapi.Filter.and(filter_actual);
+        }
+        if (filter_planned.length > 1){
+            filter_planned = Rally.data.wsapi.Filter.and(filter_planned);
+        }
+        return filter_planned.or(filter_actual);
     },
     updateStoreFilters: function(){
+        console.log('UpdateStoreFilters');
         if (this.down('treegridcontainer')){
             this.down('treegridcontainer').storeConfig.filters = this._getDateFilters();
             this.down('treegridcontainer').applyCustomFilter(this.down('treegridcontainer').currentCustomFilter);
@@ -283,9 +295,12 @@
     },
     _updateStore: function(modelNames){
         var filters = this._getDateFilters();
-
+   
         var field_names = [];
 
+        if (filters === null){
+            return;
+        }
         Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
             models: modelNames,
             filters: filters,
@@ -318,8 +333,11 @@
                 columnCfgs: this._getColumnCfgs(),
                 derivedColumns: this._getDerivedColumns(),
                 store: store,
+                storeConfig: {
+                    filters: this._getDateFilters()
+                },
                 stateful: true,
-                stateId: this.getContext().getScopedStateId('cost-tree-grid-11')
+                stateId: this.getContext().getScopedStateId('cost-tree-grid')
             },
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
@@ -432,6 +450,7 @@
     normalizedCostPerUnit: 1,
     projectCostPerUnit: {},
 
+    preliminaryBudgetField: 'PreliminaryEstimate',
     /**
      * App configurations
      */
@@ -442,7 +461,8 @@
             label: 'Based on Story Points',
             displayName: 'Story Points',
             defaultColumns: ['Name', 'Project', 'PlanEstimate', 'LeafStoryPlanEstimateTotal'],
-            additionalStoryFetch: ['PlanEstimate'],
+            requiredStoryFetch: ['ScheduleState','PortfolioItem','PlanEstimate'],
+            requiredTaskFetch: [],
             actualUnitsForStoryFn: function(data){
                 if (data.PlanEstimate && Ext.Array.contains(PortfolioItemCostTracking.Settings.completedScheduleStates, data.ScheduleState)) {
                     return data.PlanEstimate || 0;
@@ -458,7 +478,8 @@
             displayName: 'Task Actuals',
             label: 'Based on Task Actuals',
             defaultColumns: ['Name','Project'],
-            additionalStoryFetch: ['TaskEstimateTotal','TaskActualTotal','TaskRemainingTotal'],
+            requiredStoryFetch: ['ScheduleState','PortfolioItem','TaskEstimateTotal','TaskActualTotal','TaskRemainingTotal'],
+            requiredTaskFetch: ['ToDo','Actuals'],
             actualUnitsForStoryFn: function(data){ return data.TaskActualTotal || 0; },
             totalUnitsForStoryFn: function(data){
                 return (data.TaskActualTotal || 0) + (data.TaskRemainingTotal || 0);
@@ -475,7 +496,8 @@
             displayName: 'Time Spent',
             label: 'Based on Timesheets',
             defaultColumns: ['Name','Project'],
-            additionalStoryFetch: [],
+            requiredStoryFetch: [],
+            requiredTaskFetch: [],
             disabled: true,
             actualUnitsForStoryFn: function(data){ return 0; },
             actualUnitsForTaskFn: function(data){ return 0; },
@@ -484,13 +506,17 @@
         }
     },
 
-    portfolioItemFetch: ['ObjectID','FormattedID','Parent','Children','UserStories','PreliminaryEstimate','Value'],
-    storyFetch: ['ObjectID','FormattedID','Project','ScheduleState','PortfolioItem'],
-    treeFetch: ['ObjectID','FormattedID','Name','Project','Release','PreliminaryEstimate','PlanEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
+    /**
+     * Required fetch fields in addition to what the Tree might fetch.  We need these for the rollup data fetch lists and for group by Release
+     */
+    requiredPortfolioItemFetch: ['UserStories'],
+    requiredFetch: ['ObjectID','FormattedID','Project','Parent','Children','Release','Name'],
 
     notAvailableText: '--',
 
     completedScheduleStates: [],
+
+    portfolioItemTypes: [],
 
     currencyData: [
         {name: "US Dollars", value: "$"},
@@ -499,8 +525,7 @@
         {name: "Brazilian Real", value: "R$"}
     ],
     setCalculationType: function(type){
-        console.log('setCalculationType', type);
-        //Check that actuals is on, and warn user if it is not.
+         //Check that actuals is on, and warn user if it is not.
         if (type === 'taskHours'){
             Rally.data.ModelFactory.getModel({
                 type: 'task',
@@ -522,7 +547,10 @@
         }
     },
     getPortfolioItemTypes: function(){
-        return _.map(this.portfolioItemTypes, function(p){ return p.toLowerCase(); });
+        return _.map( this.portfolioItemTypes, function(p){ return p.typePath.toLowerCase(); });
+    },
+    getPortfolioItemTypeObjects: function(){
+        return this.portfolioItemTypes;
     },
     getCalculationTypeSettings: function(){
         return PortfolioItemCostTracking.Settings.calculationTypes[PortfolioItemCostTracking.Settings.selectedCalculationType] || PortfolioItemCostTracking.Settings.calculationTypes.points;
@@ -546,32 +574,49 @@
         }
         return true;
     },
+    /**
+     * This function returns all the fields that we want to return for the tree. It is built depending on the settings for cost calculations so
+     * that we know to include all necessary fields.
+     * @param fetch
+     * @returns {*}
+     */
     getTreeFetch: function(fetch){
         if (!fetch){
             fetch = [];
         }
-        return Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.treeFetch);
+
+
+       return Ext.Array.merge(PortfolioItemCostTracking.Settings.getStoryFetch(),
+                                PortfolioItemCostTracking.Settings.getPortfolioItemFetch(),
+                                (PortfolioItemCostTracking.Settings.getCalculationTypeSettings().requiredTaskFetch || []));
+
     },
     getStoryFetch: function(fetch){
         if (!fetch){
             fetch = [];
         }
-        console.log('Settings.getStoryFetch', fetch);
-        fetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.storyFetch);
-        console.log('Settings.getStoryFetch 1', fetch);
 
-        fetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getCalculationTypeSettings().additionalStoryFetch);
-        console.log('Settings.getStoryFetch 2', fetch);
+        return Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.requiredFetch,
+                        PortfolioItemCostTracking.Settings.getCalculationTypeSettings().requiredStoryFetch);
 
-        return fetch;
     },
     getPortfolioItemFetch: function(fetch){
         if (!fetch){
             fetch = [];
         }
-        return Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.portfolioItemFetch);
-    },
 
+        return Ext.Array.merge(PortfolioItemCostTracking.Settings.requiredFetch,
+            PortfolioItemCostTracking.Settings._getPreliminaryBudgetFields(),
+            PortfolioItemCostTracking.Settings.requiredPortfolioItemFetch);
+
+    },
+    _getPreliminaryBudgetFields: function(){
+        var preliminaryBudgetFields = [PortfolioItemCostTracking.Settings.preliminaryBudgetField];
+        if (PortfolioItemCostTracking.Settings.preliminaryBudgetField === "PreliminaryEstimate"){
+            preliminaryBudgetFields.push('Value');
+        }
+        return preliminaryBudgetFields;
+    },
     getFields: function(config) {
 
         var current_calculation_type = (config && config.selectedCalculationType) || 'points',
@@ -600,6 +645,13 @@
             displayField: 'name',
             valueField: 'value',
             fieldLabel:  'Currency',
+            labelWidth: labelWidth,
+            margin: '10 0 10 0'
+        },{
+            xtype: 'numberfieldcombobox',
+            name: 'preliminaryBudgetField',
+            fieldLabel: 'Preliminary Budget Field',
+            model: 'PortfolioItem',
             labelWidth: labelWidth,
             margin: '10 0 10 0'
         },{
@@ -755,7 +807,7 @@
 
         var store = Ext.create('Rally.data.wsapi.Store', {
             model: 'TypeDefinition',
-            fetch: ['TypePath', 'Ordinal'],
+            fetch: ['TypePath', 'Ordinal','Name'],
             filters: [{
                 property: 'TypePath',
                 operator: 'contains',
@@ -773,7 +825,7 @@
                     _.each(records, function(d){
                         //Use ordinal to make sure the lowest level portfolio item type is the first in the array.
                         var idx = Number(d.get('Ordinal'));
-                        portfolioItemTypes[idx] = d.get('TypePath');
+                        portfolioItemTypes[idx] = { typePath: d.get('TypePath'), name: d.get('Name') };
                         //portfolioItemTypes.reverse();
                     });
                     deferred.resolve(portfolioItemTypes);
@@ -1094,44 +1146,7 @@
                 }
             });
         },
-        getExportableRollupData: function(rootObjectIDs, columns){
 
-            var exportData = [];
-
-            _.each(rootObjectIDs, function(oid){
-                var obj = this.getRollupItem(oid);
-                if (obj){
-                    var rec = this._getExportDataRow(obj, columns);
-                    exportData.push(rec);
-                    this._addExportChildren(obj,exportData, columns);
-                }
-            },this);
-            return exportData;
-        },
-        _addExportChildren: function(obj, exportData, columns){
-            var children = obj.children;
-            if (children && children.length > 0){
-                _.each(children, function(c){
-                    var row = this._getExportDataRow(this.getRollupItem(c),columns);
-                    exportData.push(row);
-                    this._addExportChildren(this.getRollupItem(c), exportData, columns);
-                }, this);
-            }
-            return;
-        },
-        _getExportDataRow: function(obj, columns){
-            var rec = {},
-                type = obj.getData('type');
-
-            rec[type] = obj.getData('FormattedID');
-            _.each(columns, function(c){
-                var field = c.dataIndex || c.costField || null;
-                if (field){
-                    rec[field] = obj.getData(field);
-                }
-             });
-            return rec;
-        },
         _buildRollupData: function (record) {
             console.log('_buildRollupData');
             var deferred = Ext.create('Deft.Deferred');
@@ -1183,7 +1198,7 @@
         _calculatePortfolioItemRollupData: function (key) {
             var data = this.getRollupItem(key);
             if (data && PortfolioItemCostTracking.Utilities.isPortfolioItem(data.type) &&
-                (data.type.toLowerCase() !== PortfolioItemCostTracking.Settings.portfolioItemTypes[0].toLowerCase())) {
+                (data.type.toLowerCase() !== PortfolioItemCostTracking.Settings.getPortfolioItemTypes()[0].toLowerCase())) {
                 _.each(data.children, function (childKey) {
                     this._calculatePortfolioItemRollupData(childKey);
                     data.addChildRollupData(this.getRollupItem(childKey));
@@ -1200,14 +1215,14 @@
         },
 
         _getChildPortfolioModelType: function (portfolioItemType) {
-            var found = Ext.Array.filter(PortfolioItemCostTracking.Settings.portfolioItemTypes, function (item) {
+            var found = Ext.Array.filter(PortfolioItemCostTracking.Settings.getPortfolioItemTypes(), function (item) {
                 return item.toLowerCase() === portfolioItemType.toLowerCase();
             });
 
             if (found && found.length > 0) {
-                var idx = _.indexOf(PortfolioItemCostTracking.Settings.portfolioItemTypes, found[0]);
+                var idx = _.indexOf(PortfolioItemCostTracking.Settings.getPortfolioItemTypes(), found[0]);
                 if (idx > 0) {
-                    return PortfolioItemCostTracking.Settings.portfolioItemTypes[idx - 1].toLowerCase();
+                    return PortfolioItemCostTracking.Settings.getPortfolioItemTypes()[idx - 1].toLowerCase();
                 }
             }
             return null;
@@ -1442,10 +1457,13 @@
         return null;
     },
     calculatePreliminaryBudget: function(data){
+        var preliminaryBudgetField = PortfolioItemCostTracking.Settings.preliminaryBudgetField;
 
-        if (data && data.PreliminaryEstimate && data.PreliminaryEstimate.Value){
+        if (data && data[preliminaryBudgetField]){
+            //We need to do this in case we are using hte PreliminaryEstimate field, which is an object
+            var val = data[preliminaryBudgetField].Value || data[preliminaryBudgetField];
             var cpu = PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
-            return cpu * data.PreliminaryEstimate.Value;
+            return cpu * val;
         }
         return null;
     }
@@ -1975,95 +1993,6 @@ Ext.define('Rally.data.wsapi.ProjectTreeStoreBuilder', {
         return this.tpl.apply(data);
     }
 });
-
-//Ext.override(Rally.ui.grid.TreeGrid,{
-//    //_getStatefulColumns: function(columnCfgs) {
-//    //    return _.filter(columnCfgs, function(columnCfg) {
-//    //        var columnName = Ext.isString(columnCfg) ? columnCfg: columnCfg.dataIndex;
-//    //        return !Ext.isEmpty(columnName) && this._isStatefulColumn(columnName);
-//    //    }, this);
-//    //    //console.log('_getStatefulColumns',columnCfgs);
-//    //    //return columnCfgs;
-//    //},
-//    reconfigureWithColumns: function(columnCfgs, reconfigureExistingColumns, suspendLoad) {
-//        columnCfgs = this._getStatefulColumns(columnCfgs);
-//
-//        if (!reconfigureExistingColumns) {
-//            columnCfgs = this._mergeColumnConfigs(columnCfgs, this.columns);
-//        }
-//
-//        this.columnCfgs = columnCfgs;
-//        console.log('beforebuild', this.columns, this.columnCfgs);
-//        this._buildColumns(true);
-//        console.log('afterbuild', this.columns, this.columnCfgs);
-//        this.getStore().fetch = this._buildFetch();
-//
-//        this.on('reconfigure', function() {
-//            this.headerCt.setSortState();
-//        }, this, {single: true});
-//        this.reconfigure(null, this.columns);
-//        this.columns = this.headerCt.items.getRange();
-//
-//        if (!suspendLoad) {
-//            this.getStore().load();
-//        }
-//    },
-
-
-    //_applyState: function(state) {
-    //    console.log('_applyState',state);
-    //    if (state.columns) {
-    //        // make sure flex is set correctly for column configs saved in a preference
-    //        _.each(state.columns, this._setColumnFlex, this);
-    //        if (this.enableRanking) {
-    //            state.columns = this._removeExistingRankColumn(state.columns);
-    //        }
-    //
-    //        this._applyStatefulColumns(state.columns);
-    //    }
-    //
-    //    if (state.pagingToolbar) {
-    //        var store = this.getStore();
-    //        store.pageSize = state.pagingToolbar.pageSize;
-    //        store.currentPage = state.pagingToolbar.currentPage;
-    //    }
-    //
-    //    if (state.sorters) {
-    //        var sorters = _.transform(state.sorters, function (collection, sorterState) {
-    //            if(Rally.data.Ranker.isRankField(sorterState.property)) {
-    //                sorterState.property = Rally.data.Ranker.getRankField(this.store.model);
-    //            }
-    //
-    //            collection.add(Ext.create('Ext.util.Sorter', {
-    //                property: sorterState.property,
-    //                direction: sorterState.direction
-    //            }));
-    //        }, Ext.create('Ext.util.MixedCollection'), this);
-    //        this.getStore().sorters = sorters;
-    //    }
-    //
-    //    if (state.expandedRowPersistence) {
-    //        this.expandedRowPersistenceState = state.expandedRowPersistence;
-    //    }
-    //
-    //    this.fireEvent('staterestore', this, state);
-    //},
-    //
-    //_applyStatefulColumns: function(columns) {
-    //    console.log('_applyStatefulColumns',columns);
-    //    if (this.alwaysShowDefaultColumns) {
-    //        _.each(this.columnCfgs, function(columnCfg) {
-    //            var dataIndex = _.has(columnCfg.dataIndex) ? columnCfg.dataIndex : columnCfg;
-    //            if (!_.any(columns, {dataIndex: dataIndex})) {
-    //                columns.push(columnCfg);
-    //            }
-    //        });
-    //    }
-    //
-    //    this.columnCfgs = columns;
-    //}
-//});
-
                 
 Ext.define('TreeGridContainerCustomFilterControl', {
     alias: 'plugin.treegridcontainercustomfiltercontrol',
@@ -2557,6 +2486,8 @@ Ext.define('TreeGridContainerCustomFilterControl', {
         if (this.currentCustomFilter) {
             this._applyGridFilters(grid, this.currentCustomFilter);
         }
+
+
        return grid;
     },
     _applyGridFilters: function (grid, filterObj) {
@@ -2567,6 +2498,13 @@ Ext.define('TreeGridContainerCustomFilterControl', {
         grid.store.filter(this._getConfiguredFilters(filterObj.filters || [], filterObj.types || []));
     },
     _onGridLoad: function () {
+
+        //var view = this.getGrid().getView(); //Get the view of the treePanel
+        //var feature = view.getFeature(0);   //Get the grouping feature (in our case it is the only child...)
+        //var view2 = feature.view;
+        //var store = view2.store;
+        //store.group('Release');
+
         this.fireEvent('load', this);
 
         if (Rally.BrowserTest) {
@@ -2575,16 +2513,84 @@ Ext.define('TreeGridContainerCustomFilterControl', {
     }
 
 });
-                Ext.define('PortfolioItemCostTracking.Utilities',{
+                Ext.define('PortfolioItemCostTracking.Utilities', {
     singleton: true,
-    isPortfolioItem: function(type){
-        var portfolioItemRegExp = new RegExp('^portfolioitem/',"i");
+    isPortfolioItem: function (type) {
+        var portfolioItemRegExp = new RegExp('^portfolioitem/', "i");
         return portfolioItemRegExp.test(type);
+    },
+
+    saveCSVToFile:function(csv,file_name,type_object){
+        if (type_object === undefined){
+            type_object = {type:'text/csv;charset=utf-8'};
+        }
+        var blob = new Blob([csv],type_object);
+        saveAs(blob,file_name);
+    }
+});
+
+
+                Ext.define('PortfolioItemCostTracking.Exporter',{
+    saveCSVToFile:function(csv,file_name,type_object){
+        if (type_object === undefined){
+            type_object = {type:'text/csv;charset=utf-8'};
+        }
+        this.saveAs(csv,file_name, type_object);
+    },
+    saveAs: function(textToWrite, fileName)
+    {
+        var textFileAsBlob = new Blob([textToWrite], {type:'text/plain'});
+        var fileNameToSaveAs = fileName;
+
+        if (Ext.isIE10p){
+            window.navigator.msSaveOrOpenBlob(textFileAsBlob,fileNameToSaveAs); // Now the user will have the option of clicking the Save button and the Open button.
+            return;
+        }
+
+        var url = this.createObjectURL(textFileAsBlob);
+
+        if (url){
+            var downloadLink = document.createElement("a");
+            if ("download" in downloadLink){
+                downloadLink.download = fileNameToSaveAs;
+            } else {
+                //Open the file in a new tab
+                downloadLink.target = "_blank";
+            }
+
+            downloadLink.innerHTML = "Download File";
+            downloadLink.href = url;
+            if (!Ext.isChrome){
+                // Firefox requires the link to be added to the DOM
+                // before it can be clicked.
+                downloadLink.onclick = this.destroyClickedElement;
+                downloadLink.style.display = "none";
+                document.body.appendChild(downloadLink);
+            }
+            downloadLink.click();
+        } else {
+            Rally.ui.notify.Notifier.showError({message: "Export is not supported "});
+        }
+
+    },
+    createObjectURL: function ( file ) {
+        if ( window.webkitURL ) {
+            return window.webkitURL.createObjectURL( file );
+        } else if ( window.URL && window.URL.createObjectURL ) {
+            return window.URL.createObjectURL( file );
+        } else {
+            return null;
+        }
+    },
+    destroyClickedElement: function(event)
+    {
+        document.body.removeChild(event.target);
     },
     fetchExportData: function(rootModel, rootFilters, fetch, columns){
         var deferred = Ext.create('Deft.Deferred');
         var recordCounter = 0;
         var rootFetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getPortfolioItemFetch());
+
 
         PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords(rootModel, rootFilters || [], rootFetch).then({
             scope: this,
@@ -2602,8 +2608,10 @@ Ext.define('TreeGridContainerCustomFilterControl', {
                             console.log('dataUpdated', data, recordCounter, recordTotal);
                             recordCounter++;
                             if (recordCounter == recordTotal){
-                                var exportData = rollupData.getExportableRollupData(oids,columns);
-                                var csv = exportData;
+                                var exportData = this._getExportableRollupData(oids,columns, rollupData);
+
+                                columns = this._getAncestorTypeColumns(rootModel).concat(columns);
+                                var csv = this._transformExportableRollupDataToDelimitedString(exportData, columns);
                                 deferred.resolve(csv);
                             }
                         },
@@ -2622,9 +2630,142 @@ Ext.define('TreeGridContainerCustomFilterControl', {
             }
         });
         return deferred;
+    },
+    _transformExportableRollupDataToDelimitedString: function(rollupData, columns){
+        var csvArray = [],
+            delimiter = ",",
+            rowDelimiter = "\r\n",
+            re = new RegExp(delimiter + '|\"|\r|\n','g');
+
+        var column_keys = _.pluck(columns, 'dataIndex'),
+            column_headers = _.pluck(columns, 'text');
+
+        csvArray.push(column_headers.join(delimiter));
+
+        Ext.Array.each(rollupData, function(obj){
+            var data = [];
+            Ext.Array.each(column_keys, function(key){
+                var val = obj[key];
+                if (val){
+                    if (re.test(val)){ //enclose in double quotes if we have the delimiters
+                        val = val.replace('"','\"\"');
+                        val = Ext.String.format("\"{0}\"",val);
+                    }
+                }
+               data.push(val);
+            });
+            csvArray.push(data.join(delimiter));
+        });
+
+        return csvArray.join(rowDelimiter);
+    },
+    /**
+     * Returns an array of hash rollup data
+     *
+     * @param rootObjectIDs
+     * @param columns - the data index of the columns that we want to export.
+     * @param rollupData
+     * @returns {Array}
+     * @private
+     */
+    _getExportableRollupData: function(rootObjectIDs, columns, rollupData){
+
+        var exportData = [];
+
+        _.each(rootObjectIDs, function(oid){
+            var obj = rollupData.getRollupItem(oid);
+            if (obj){
+                var ancestors = {};
+                var rec = this._getExportDataRow(obj, columns , ancestors);
+                exportData.push(rec);
+                this._addExportChildren(obj,exportData, columns, rollupData,ancestors);
+            }
+        },this);
+        return exportData;
+    },
+    _addExportChildren: function(obj, exportData, columns, rollupData,ancestors){
+        ancestors[obj.getData('type')] = obj.getData('FormattedID');
+
+        var children = obj.children;
+        if (children && children.length > 0){
+            _.each(children, function(c){
+                var row = this._getExportDataRow(rollupData.getRollupItem(c),columns, ancestors);
+                exportData.push(row);
+                this._addExportChildren(rollupData.getRollupItem(c), exportData, columns, rollupData, ancestors);
+            }, this);
+        }
+        return;
+    },
+    _getExportDataRow: function(obj, columns, ancestors){
+        var rec = Ext.clone(ancestors),
+            type = obj.getData('type');
+
+        rec[type] = obj.getData('FormattedID');
+        _.each(columns, function(c){
+            var field = c.dataIndex || null;
+            if (field){
+                var data = obj.getData(field);
+                console.log('data field',field, obj.getData(field));
+
+                if (Ext.isObject(data)){
+                    rec[field] = data._refObjectName;
+                } else if (Ext.isDate(data)){
+                    rec[field] = Rally.util.DateTime.formatWithDefaultDateTime(data);
+                } else {
+                    rec[field] = data;
+                }
+
+            }
+        });
+        return rec;
+    },
+    _getAncestorTypeColumns: function(rootModel){
+        var piTypes = PortfolioItemCostTracking.Settings.getPortfolioItemTypeObjects(),
+            piIdx = -1;
+
+        Ext.Array.each(piTypes, function(piObj, idx){
+            if (piObj.typePath.toLowerCase() === rootModel.toLowerCase()){
+                piIdx = idx;
+            }
+        });
+
+        var columns = [{
+            dataIndex: 'hierarchicalrequirement',
+            text: 'User Story'
+        }];
+
+        if (piIdx >= 0){
+            columns = columns.concat(Ext.Array.map(piTypes.slice(0,piIdx+1), function(piObj) { return { dataIndex: piObj.typePath.toLowerCase(), text: piObj.name };} ));
+            columns.reverse();
+        }
+        return columns;
     }
 });
 
+
+                Ext.define('PortfolioItemCostTracking.NumberFieldComboBox', {
+    requires: [],
+    extend: 'Rally.ui.combobox.FieldComboBox',
+    alias: 'widget.numberfieldcombobox',
+    _isNotHidden: function(field) {
+        var validFields= ['PreliminaryEstimate','RefinedEstimate','ValueScore'];
+
+        if (!field.hidden) {
+
+            if (Ext.Array.contains(validFields, field.name)) {
+                return true;
+            }
+
+            //Allow for custom number fields
+            if (field.custom && field.attributeDefinition) {
+                return (field.attributeDefinition.AttributeType === "INTEGER" ||
+                field.attributeDefinition.AttributeType === "DECIMAL");
+
+            }
+        }
+        return false;
+    }
+});
 
 
             Rally.launchApp('PortfolioItemCostTracking', {

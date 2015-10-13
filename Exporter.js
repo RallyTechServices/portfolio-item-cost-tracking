@@ -1,120 +1,212 @@
-Ext.define('GridExporter',{
-    singleton: true,
-/*
- * will render using your grid renderer.  If you want it to ignore the grid renderer,
- * have the column set _csvIgnoreRender: true
- */
-getCSVFromGrid:function(app, grid){
-    var deferred = Ext.create('Deft.Deferred');
+Ext.define('PortfolioItemCostTracking.Exporter',{
+    saveCSVToFile:function(csv,file_name,type_object){
+        if (type_object === undefined){
+            type_object = {type:'text/csv;charset=utf-8'};
+        }
+        this.saveAs(csv,file_name, type_object);
+    },
+    saveAs: function(textToWrite, fileName)
+    {
+        var textFileAsBlob = new Blob([textToWrite], {type:'text/plain'});
+        var fileNameToSaveAs = fileName;
 
-    var store = Ext.create('Rally.data.wsapi.Store',{
-        fetch: grid.getStore().config.fetch,
-        filters: grid.getStore().config.filters,
-        model: grid.getStore().config.model,
-        pageSize: 200
-    });
+        if (Ext.isIE10p){
+            window.navigator.msSaveOrOpenBlob(textFileAsBlob,fileNameToSaveAs); // Now the user will have the option of clicking the Save button and the Open button.
+            return;
+        }
 
-    var columns = grid.columns;
-    var column_names = [];
-    var headers = [];
+        var url = this.createObjectURL(textFileAsBlob);
 
-    Ext.Array.each(columns,function(column){
-        if ( column.dataIndex || column.renderer ) {
-            column_names.push(column.dataIndex);
-            if ( column.csvText ) {
-                headers.push(column.csvText);
+        if (url){
+            var downloadLink = document.createElement("a");
+            if ("download" in downloadLink){
+                downloadLink.download = fileNameToSaveAs;
             } else {
-                headers.push(column.text);
+                //Open the file in a new tab
+                downloadLink.target = "_blank";
             }
+
+            downloadLink.innerHTML = "Download File";
+            downloadLink.href = url;
+            if (!Ext.isChrome){
+                // Firefox requires the link to be added to the DOM
+                // before it can be clicked.
+                downloadLink.onclick = this.destroyClickedElement;
+                downloadLink.style.display = "none";
+                document.body.appendChild(downloadLink);
+            }
+            downloadLink.click();
+        } else {
+            Rally.ui.notify.Notifier.showError({message: "Export is not supported "});
         }
-    });
 
-    var record_count = grid.getStore().getTotalCount(),
-        page_size = grid.getStore().pageSize,
-        pages = Math.ceil(record_count/page_size),
-        promises = [];
-
-    for (var page = 1; page <= pages; page ++ ) {
-        promises.push(this.loadStorePage(app, grid, store, columns, page, pages));
-    }
-    Deft.Promise.all(promises).then({
-        success: function(csvs){
-            var csv = [];
-            csv.push('"' + headers.join('","') + '"');
-            _.each(csvs, function(c){
-                _.each(c, function(line){
-                    csv.push(line);
-                });
-            });
-            csv = csv.join('\r\n');
-            deferred.resolve(csv);
-            app.setLoading(false);
+    },
+    createObjectURL: function ( file ) {
+        if ( window.webkitURL ) {
+            return window.webkitURL.createObjectURL( file );
+        } else if ( window.URL && window.URL.createObjectURL ) {
+            return window.URL.createObjectURL( file );
+        } else {
+            return null;
         }
-    });
-    return deferred.promise;
+    },
+    destroyClickedElement: function(event)
+    {
+        document.body.removeChild(event.target);
+    },
+    fetchExportData: function(rootModel, rootFilters, fetch, columns){
+        var deferred = Ext.create('Deft.Deferred');
+        var recordCounter = 0;
+        var rootFetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getPortfolioItemFetch());
 
-},
-loadStorePage: function(app, grid, store, columns, page, total_pages){
-    var deferred = Ext.create('Deft.Deferred');
-    this.logger.log('loadStorePage',page, total_pages);
 
-    var mock_meta_data = {
-        align: "right",
-        classes: [],
-        cellIndex: 9,
-        column: null,
-        columnIndex: 9,
-        innerCls: undefined,
-        recordIndex: 5,
-        rowIndex: 5,
-        style: "",
-        tdAttr: "",
-        tdCls: "x-grid-cell x-grid-td x-grid-cell-headerId-gridcolumn-1029 x-grid-cell-last x-unselectable",
-        unselectableAttr: "unselectable='on'"
-    }
+        PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords(rootModel, rootFilters || [], rootFetch).then({
+            scope: this,
+            success: function(records){
+                console.log('fetchExportData success', records);
+                var recordTotal = records.length;
 
-    store.loadPage(page, {
-        callback: function (records) {
-            var csv = [];
-            app.setLoading(Ext.String.format('Page {0} of {1} loaded',page, total_pages));
-            for (var i = 0; i < records.length; i++) {
-                var record = records[i];
+                var oids = _.map(records, function(r){ return r.get('ObjectID'); });
 
-                var node_values = [];
-                Ext.Array.each(columns, function (column) {
-                    if (column.xtype != 'rallyrowactioncolumn') {
-                        if (column.dataIndex) {
-                            var column_name = column.dataIndex;
-                            var display_value = record.get(column_name);
+                var rollupData = Ext.create('PortfolioItemCostTracking.RollupData',{
+                    fetch: fetch,
+                    listeners: {
+                        scope: this,
+                        dataUpdated: function(data){
+                            console.log('dataUpdated', data, recordCounter, recordTotal);
+                            recordCounter++;
+                            if (recordCounter == recordTotal){
+                                var exportData = this._getExportableRollupData(oids,columns, rollupData);
 
-                            if (!column._csvIgnoreRender && column.renderer) {
-                                if (column.exportRenderer) {
-                                    display_value = column.exportRenderer(display_value, mock_meta_data, record, 0, 0, store, grid.getView());
-                                } else {
-                                    display_value = column.renderer(display_value, mock_meta_data, record, 0, 0, store, grid.getView());
-                                }
+                                columns = this._getAncestorTypeColumns(rootModel).concat(columns);
+                                var csv = this._transformExportableRollupDataToDelimitedString(exportData, columns);
+                                deferred.resolve(csv);
                             }
-                            node_values.push(display_value);
-                        } else {
-                            var display_value = null;
-                            if (!column._csvIgnoreRender && column.renderer) {
-                                if (column.exportRenderer) {
-                                    display_value = column.exportRenderer(display_value, mock_meta_data, record, record, 0, 0, store, grid.getView());
-                                } else {
-                                    display_value = column.renderer(display_value, mock_meta_data, record, record, 0, 0, store, grid.getView());
-                                }
-                                node_values.push(display_value);
-                            }
+                        },
+                        error: function(msg){
+                            console.log('error',msg);
                         }
-
                     }
+                });
+
+                _.each(records, function(r) {
+                    rollupData.setRollupData(r);
                 }, this);
-                csv.push('"' + node_values.join('","') + '"');
+            },
+            failure: function(msg){
+                deferred.reject(msg);
             }
-            deferred.resolve(csv);
-        },
-        scope: this
-    });
-    return deferred;
-}
+        });
+        return deferred;
+    },
+    _transformExportableRollupDataToDelimitedString: function(rollupData, columns){
+        var csvArray = [],
+            delimiter = ",",
+            rowDelimiter = "\r\n",
+            re = new RegExp(delimiter + '|\"|\r|\n','g');
+
+        var column_keys = _.pluck(columns, 'dataIndex'),
+            column_headers = _.pluck(columns, 'text');
+
+        csvArray.push(column_headers.join(delimiter));
+
+        Ext.Array.each(rollupData, function(obj){
+            var data = [];
+            Ext.Array.each(column_keys, function(key){
+                var val = obj[key];
+                if (val){
+                    if (re.test(val)){ //enclose in double quotes if we have the delimiters
+                        val = val.replace('"','\"\"');
+                        val = Ext.String.format("\"{0}\"",val);
+                    }
+                }
+               data.push(val);
+            });
+            csvArray.push(data.join(delimiter));
+        });
+
+        return csvArray.join(rowDelimiter);
+    },
+    /**
+     * Returns an array of hash rollup data
+     *
+     * @param rootObjectIDs
+     * @param columns - the data index of the columns that we want to export.
+     * @param rollupData
+     * @returns {Array}
+     * @private
+     */
+    _getExportableRollupData: function(rootObjectIDs, columns, rollupData){
+
+        var exportData = [];
+
+        _.each(rootObjectIDs, function(oid){
+            var obj = rollupData.getRollupItem(oid);
+            if (obj){
+                var ancestors = {};
+                var rec = this._getExportDataRow(obj, columns , ancestors);
+                exportData.push(rec);
+                this._addExportChildren(obj,exportData, columns, rollupData,ancestors);
+            }
+        },this);
+        return exportData;
+    },
+    _addExportChildren: function(obj, exportData, columns, rollupData,ancestors){
+        ancestors[obj.getData('type')] = obj.getData('FormattedID');
+
+        var children = obj.children;
+        if (children && children.length > 0){
+            _.each(children, function(c){
+                var row = this._getExportDataRow(rollupData.getRollupItem(c),columns, ancestors);
+                exportData.push(row);
+                this._addExportChildren(rollupData.getRollupItem(c), exportData, columns, rollupData, ancestors);
+            }, this);
+        }
+        return;
+    },
+    _getExportDataRow: function(obj, columns, ancestors){
+        var rec = Ext.clone(ancestors),
+            type = obj.getData('type');
+
+        rec[type] = obj.getData('FormattedID');
+        _.each(columns, function(c){
+            var field = c.dataIndex || null;
+            if (field){
+                var data = obj.getData(field);
+                console.log('data field',field, obj.getData(field));
+
+                if (Ext.isObject(data)){
+                    rec[field] = data._refObjectName;
+                } else if (Ext.isDate(data)){
+                    rec[field] = Rally.util.DateTime.formatWithDefaultDateTime(data);
+                } else {
+                    rec[field] = data;
+                }
+
+            }
+        });
+        return rec;
+    },
+    _getAncestorTypeColumns: function(rootModel){
+        var piTypes = PortfolioItemCostTracking.Settings.getPortfolioItemTypeObjects(),
+            piIdx = -1;
+
+        Ext.Array.each(piTypes, function(piObj, idx){
+            if (piObj.typePath.toLowerCase() === rootModel.toLowerCase()){
+                piIdx = idx;
+            }
+        });
+
+        var columns = [{
+            dataIndex: 'hierarchicalrequirement',
+            text: 'User Story'
+        }];
+
+        if (piIdx >= 0){
+            columns = columns.concat(Ext.Array.map(piTypes.slice(0,piIdx+1), function(piObj) { return { dataIndex: piObj.typePath.toLowerCase(), text: piObj.name };} ));
+            columns.reverse();
+        }
+        return columns;
+    }
 });
+

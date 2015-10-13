@@ -15,6 +15,7 @@ Ext.define('PortfolioItemCostTracking.Settings', {
     normalizedCostPerUnit: 1,
     projectCostPerUnit: {},
 
+    preliminaryBudgetField: 'PreliminaryEstimate',
     /**
      * App configurations
      */
@@ -25,7 +26,8 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             label: 'Based on Story Points',
             displayName: 'Story Points',
             defaultColumns: ['Name', 'Project', 'PlanEstimate', 'LeafStoryPlanEstimateTotal'],
-            additionalStoryFetch: ['PlanEstimate'],
+            requiredStoryFetch: ['ScheduleState','PortfolioItem','PlanEstimate'],
+            requiredTaskFetch: [],
             actualUnitsForStoryFn: function(data){
                 if (data.PlanEstimate && Ext.Array.contains(PortfolioItemCostTracking.Settings.completedScheduleStates, data.ScheduleState)) {
                     return data.PlanEstimate || 0;
@@ -41,7 +43,8 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             displayName: 'Task Actuals',
             label: 'Based on Task Actuals',
             defaultColumns: ['Name','Project'],
-            additionalStoryFetch: ['TaskEstimateTotal','TaskActualTotal','TaskRemainingTotal'],
+            requiredStoryFetch: ['ScheduleState','PortfolioItem','TaskEstimateTotal','TaskActualTotal','TaskRemainingTotal'],
+            requiredTaskFetch: ['ToDo','Actuals'],
             actualUnitsForStoryFn: function(data){ return data.TaskActualTotal || 0; },
             totalUnitsForStoryFn: function(data){
                 return (data.TaskActualTotal || 0) + (data.TaskRemainingTotal || 0);
@@ -58,7 +61,8 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             displayName: 'Time Spent',
             label: 'Based on Timesheets',
             defaultColumns: ['Name','Project'],
-            additionalStoryFetch: [],
+            requiredStoryFetch: [],
+            requiredTaskFetch: [],
             disabled: true,
             actualUnitsForStoryFn: function(data){ return 0; },
             actualUnitsForTaskFn: function(data){ return 0; },
@@ -67,13 +71,17 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         }
     },
 
-    portfolioItemFetch: ['ObjectID','FormattedID','Parent','Children','UserStories','PreliminaryEstimate','Value'],
-    storyFetch: ['ObjectID','FormattedID','Project','ScheduleState','PortfolioItem'],
-    treeFetch: ['ObjectID','FormattedID','Name','Project','Release','PreliminaryEstimate','PlanEstimate','PercentDoneByStoryPlanEstimate','AcceptedLeafStoryPlanEstimateTotal','LeafStoryPlanEstimateTotal','Children','ToDo','Actuals'],
+    /**
+     * Required fetch fields in addition to what the Tree might fetch.  We need these for the rollup data fetch lists and for group by Release
+     */
+    requiredPortfolioItemFetch: ['UserStories'],
+    requiredFetch: ['ObjectID','FormattedID','Project','Parent','Children','Release','Name'],
 
     notAvailableText: '--',
 
     completedScheduleStates: [],
+
+    portfolioItemTypes: [],
 
     currencyData: [
         {name: "US Dollars", value: "$"},
@@ -82,8 +90,7 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         {name: "Brazilian Real", value: "R$"}
     ],
     setCalculationType: function(type){
-        console.log('setCalculationType', type);
-        //Check that actuals is on, and warn user if it is not.
+         //Check that actuals is on, and warn user if it is not.
         if (type === 'taskHours'){
             Rally.data.ModelFactory.getModel({
                 type: 'task',
@@ -105,7 +112,10 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         }
     },
     getPortfolioItemTypes: function(){
-        return _.map(this.portfolioItemTypes, function(p){ return p.toLowerCase(); });
+        return _.map( this.portfolioItemTypes, function(p){ return p.typePath.toLowerCase(); });
+    },
+    getPortfolioItemTypeObjects: function(){
+        return this.portfolioItemTypes;
     },
     getCalculationTypeSettings: function(){
         return PortfolioItemCostTracking.Settings.calculationTypes[PortfolioItemCostTracking.Settings.selectedCalculationType] || PortfolioItemCostTracking.Settings.calculationTypes.points;
@@ -129,32 +139,49 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         }
         return true;
     },
+    /**
+     * This function returns all the fields that we want to return for the tree. It is built depending on the settings for cost calculations so
+     * that we know to include all necessary fields.
+     * @param fetch
+     * @returns {*}
+     */
     getTreeFetch: function(fetch){
         if (!fetch){
             fetch = [];
         }
-        return Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.treeFetch);
+
+
+       return Ext.Array.merge(PortfolioItemCostTracking.Settings.getStoryFetch(),
+                                PortfolioItemCostTracking.Settings.getPortfolioItemFetch(),
+                                (PortfolioItemCostTracking.Settings.getCalculationTypeSettings().requiredTaskFetch || []));
+
     },
     getStoryFetch: function(fetch){
         if (!fetch){
             fetch = [];
         }
-        console.log('Settings.getStoryFetch', fetch);
-        fetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.storyFetch);
-        console.log('Settings.getStoryFetch 1', fetch);
 
-        fetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getCalculationTypeSettings().additionalStoryFetch);
-        console.log('Settings.getStoryFetch 2', fetch);
+        return Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.requiredFetch,
+                        PortfolioItemCostTracking.Settings.getCalculationTypeSettings().requiredStoryFetch);
 
-        return fetch;
     },
     getPortfolioItemFetch: function(fetch){
         if (!fetch){
             fetch = [];
         }
-        return Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.portfolioItemFetch);
-    },
 
+        return Ext.Array.merge(PortfolioItemCostTracking.Settings.requiredFetch,
+            PortfolioItemCostTracking.Settings._getPreliminaryBudgetFields(),
+            PortfolioItemCostTracking.Settings.requiredPortfolioItemFetch);
+
+    },
+    _getPreliminaryBudgetFields: function(){
+        var preliminaryBudgetFields = [PortfolioItemCostTracking.Settings.preliminaryBudgetField];
+        if (PortfolioItemCostTracking.Settings.preliminaryBudgetField === "PreliminaryEstimate"){
+            preliminaryBudgetFields.push('Value');
+        }
+        return preliminaryBudgetFields;
+    },
     getFields: function(config) {
 
         var current_calculation_type = (config && config.selectedCalculationType) || 'points',
@@ -183,6 +210,13 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             displayField: 'name',
             valueField: 'value',
             fieldLabel:  'Currency',
+            labelWidth: labelWidth,
+            margin: '10 0 10 0'
+        },{
+            xtype: 'numberfieldcombobox',
+            name: 'preliminaryBudgetField',
+            fieldLabel: 'Preliminary Budget Field',
+            model: 'PortfolioItem',
             labelWidth: labelWidth,
             margin: '10 0 10 0'
         },{
