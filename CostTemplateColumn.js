@@ -2,12 +2,14 @@ Ext.define('Ext.CostTemplate', {
     extend: 'Ext.grid.column.Template',
     alias: ['widget.costtemplatecolumn'],
 
+    align: 'right',
+
     initComponent: function(){
         var me = this;
 
         Ext.QuickTips.init();
 
-        me.tpl = new Ext.XTemplate('<tpl><div data-qtip="{[this.getTooltip(values)]}" style="cursor:pointer;">{[this.getCost(values)]}</div></tpl>',{
+        me.tpl = new Ext.XTemplate('<tpl><div data-qtip="{[this.getTooltip(values)]}" style="cursor:pointer;text-align:right;">{[this.getCost(values)]}</div></tpl>',{
             costField: me.dataIndex,
             getCost: function(values){
                 if (values[this.costField] === null){

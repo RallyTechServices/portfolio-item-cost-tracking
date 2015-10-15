@@ -48,7 +48,7 @@ Ext.define('PortfolioItemCostTracking.CostPerProjectSettings',{
             } else {
                 decodedValue = this.value;
             }
-            console.log('decodedValue',decodedValue);
+           // console.log('decodedValue',decodedValue);
         }
 
         var data = [],

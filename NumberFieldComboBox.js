@@ -3,7 +3,7 @@ Ext.define('PortfolioItemCostTracking.NumberFieldComboBox', {
     extend: 'Rally.ui.combobox.FieldComboBox',
     alias: 'widget.numberfieldcombobox',
     _isNotHidden: function(field) {
-        var validFields= ['PreliminaryEstimate','RefinedEstimate','ValueScore'];
+        var validFields= ['PreliminaryEstimate','RefinedEstimate'];
 
         if (!field.hidden) {
 
@@ -12,11 +12,11 @@ Ext.define('PortfolioItemCostTracking.NumberFieldComboBox', {
             }
 
             //Allow for custom number fields
-            if (field.custom && field.attributeDefinition) {
-                return (field.attributeDefinition.AttributeType === "INTEGER" ||
-                field.attributeDefinition.AttributeType === "DECIMAL");
-
-            }
+            //if (field.custom && field.attributeDefinition) {
+            //    return (field.attributeDefinition.AttributeType === "INTEGER" ||
+            //    field.attributeDefinition.AttributeType === "DECIMAL");
+            //
+            //}
         }
         return false;
     }

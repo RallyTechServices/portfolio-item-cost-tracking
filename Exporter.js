@@ -63,7 +63,7 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
         PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords(rootModel, rootFilters || [], rootFetch).then({
             scope: this,
             success: function(records){
-                console.log('fetchExportData success', records);
+
                 var recordTotal = records.length;
 
                 var oids = _.map(records, function(r){ return r.get('ObjectID'); });
@@ -73,7 +73,7 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
                     listeners: {
                         scope: this,
                         dataUpdated: function(data){
-                            console.log('dataUpdated', data, recordCounter, recordTotal);
+                            //console.log('dataUpdated', data, recordCounter, recordTotal);
                             recordCounter++;
                             if (recordCounter == recordTotal){
                                 var exportData = this._getExportableRollupData(oids,columns, rollupData);
@@ -84,7 +84,7 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
                             }
                         },
                         error: function(msg){
-                            console.log('error',msg);
+                            deferred.reject(msg);
                         }
                     }
                 });
@@ -152,14 +152,15 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
         return exportData;
     },
     _addExportChildren: function(obj, exportData, columns, rollupData,ancestors){
-        ancestors[obj.getData('type')] = obj.getData('FormattedID');
+        var new_ancestors = Ext.clone(ancestors);
+        new_ancestors[obj.getData('type')] = obj.getData('FormattedID');
 
         var children = obj.children;
         if (children && children.length > 0){
             _.each(children, function(c){
-                var row = this._getExportDataRow(rollupData.getRollupItem(c),columns, ancestors);
+                var row = this._getExportDataRow(rollupData.getRollupItem(c),columns, new_ancestors);
                 exportData.push(row);
-                this._addExportChildren(rollupData.getRollupItem(c), exportData, columns, rollupData, ancestors);
+                this._addExportChildren(rollupData.getRollupItem(c), exportData, columns, rollupData, new_ancestors);
             }, this);
         }
         return;
@@ -169,11 +170,11 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
             type = obj.getData('type');
 
         rec[type] = obj.getData('FormattedID');
+        rec.type = PortfolioItemCostTracking.Settings.getTypePathDisplayName(obj.getData('type'));
         _.each(columns, function(c){
             var field = c.dataIndex || null;
             if (field){
                 var data = obj.getData(field);
-                console.log('data field',field, obj.getData(field));
 
                 if (Ext.isObject(data)){
                     rec[field] = data._refObjectName;
@@ -204,6 +205,10 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
 
         if (piIdx >= 0){
             columns = columns.concat(Ext.Array.map(piTypes.slice(0,piIdx+1), function(piObj) { return { dataIndex: piObj.typePath.toLowerCase(), text: piObj.name };} ));
+            columns.push({
+                dataIndex: 'type',
+                text: 'Artifact Type'
+            });
             columns.reverse();
         }
         return columns;

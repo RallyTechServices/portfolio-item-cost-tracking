@@ -27,19 +27,20 @@ Ext.define('PortfolioItemCostTracking', {
         //ToDO: check for RPM?
 
         //Initialize the filter values...
-        var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
-            state_val = state ? state.value : null;
+        //var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
+        //    state_val = state ? state.value : null;
 
 
        Deft.Promise.all([
             PortfolioItemCostTracking.WsapiToolbox.fetchPortfolioItemTypes(),
-            PortfolioItemCostTracking.WsapiToolbox.fetchDoneStates(),
-            PortfolioItemCostTracking.WsapiToolbox.fetchModelTypePathByTypeDefinition(state_val)
+            PortfolioItemCostTracking.WsapiToolbox.fetchDoneStates()
+         //   PortfolioItemCostTracking.WsapiToolbox.fetchModelTypePathByTypeDefinition(state_val)
         ]).then({
             scope: this,
             success: function(results){
                 this._initializeSettings(this.getSettings(), results[1], results[0]);
-                this._createPickers(state_val);
+               // state_val = state_val || results[0][0]; // set the state for the pi type to the lowest level PI if its not been set yet
+                this._createPickers();
             },
             failure: function(msg){
                 Rally.ui.notify.Notifier.showError({message: msg});
@@ -50,6 +51,7 @@ Ext.define('PortfolioItemCostTracking', {
 
         var startDate = this.getStartDate(),
             endDate = this.getEndDate();
+
 
         this.fixedHeader = Ext.create('Ext.container.Container',{
             itemId: 'header-controls',
@@ -108,13 +110,19 @@ Ext.define('PortfolioItemCostTracking', {
 
         this.fixedHeader.down('#dt-start').setValue(startDate);
         this.fixedHeader.down('#dt-end').setValue(endDate);
-        this.fixedHeader.down('#cb-type').setValue(piType);
+
     },
     _attachListeners: function(){
         if (this.fixedHeader && this.fixedHeader.down('#cb-type') &&
             this.fixedHeader.down('#dt-start') && this.fixedHeader.down('#dt-end')){
 
-                this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
+            var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
+                state_val = state ? state.value : null;
+            if (state_val){
+                this.fixedHeader.down('#cb-type').setValue(state_val);
+            }
+
+            this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
                 this.fixedHeader.down('#dt-start').on('change', this.updateStoreFilters, this);
                 this.fixedHeader.down('#dt-end').on('change', this.updateStoreFilters, this);
                 this._onTypeChange(this.fixedHeader.down('#cb-type'));
@@ -195,11 +203,19 @@ Ext.define('PortfolioItemCostTracking', {
             header.getLeft().add(this.fixedHeader);
         }
     },
+    _getExportFilters: function(){
+        var filters = [];
+
+        if (this.down('treegridcontainer') && this.down('treegridcontainer').currentCustomFilter){
+            filters = this.down('treegridcontainer').currentCustomFilter.filters || [];
+        }
+        return Rally.data.wsapi.Filter.and([this._getDateFilters(),filters]);
+    },
     _showExportMenu: function () {
         var columnCfgs = this.down('treegridcontainer').getGrid().columnCfgs,
             additionalFields = _.pluck(columnCfgs, 'dataIndex');
 
-        var filters = this._getDateFilters(),//Todo: Add custom filter settings
+        var filters = this._getExportFilters(),
             fetch = PortfolioItemCostTracking.Settings.getTreeFetch(additionalFields),
             root_model = this.modelNames[0];
 
@@ -211,7 +227,7 @@ Ext.define('PortfolioItemCostTracking', {
                 exporter.saveCSVToFile(csv, filename);
             },
             failure: function(msg){
-                console.log('failure',msg);
+                Rally.ui.notify.Notifier.showError({message: "An error occurred fetching the data to export:  " + msg});
             }
         });
     },
@@ -266,7 +282,7 @@ Ext.define('PortfolioItemCostTracking', {
         return filter_planned.or(filter_actual);
     },
     updateStoreFilters: function(){
-        console.log('UpdateStoreFilters');
+
         if (this.down('treegridcontainer')){
             this.down('treegridcontainer').storeConfig.filters = this._getDateFilters();
             this.down('treegridcontainer').applyCustomFilter(this.down('treegridcontainer').currentCustomFilter);
@@ -286,7 +302,7 @@ Ext.define('PortfolioItemCostTracking', {
     },
     _updateStore: function(modelNames){
         var filters = this._getDateFilters();
-   
+
         var field_names = [];
 
         if (filters === null){
@@ -294,7 +310,7 @@ Ext.define('PortfolioItemCostTracking', {
         }
         Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
             models: modelNames,
-            filters: filters,
+            //filters: filters,
             fetch: PortfolioItemCostTracking.Settings.getTreeFetch(field_names),
             enableHierarchy: true,
             listeners: {
@@ -324,24 +340,18 @@ Ext.define('PortfolioItemCostTracking', {
                 columnCfgs: this._getColumnCfgs(),
                 derivedColumns: this._getDerivedColumns(),
                 store: store,
-                storeConfig: {
-                    filters: this._getDateFilters()
-                },
                 stateful: true,
                 stateId: this.getContext().getScopedStateId('cost-tree-grid')
+            },
+            storeConfig: {
+                filters: this._getDateFilters()
             },
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
                 filterControlConfig: {
                     modelNames: modelNames,
                     stateful: true,
-                    stateId: this.getContext().getScopedStateId('cost-grid-filter'),
-                    margin: '15px 10px 0px 0px'
-                },
-                showOwnerFilter: true,
-                ownerFilterControlConfig: {
-                    stateful: true,
-                    stateId: this.getContext().getScopedStateId('cost-grid-owner-filter'),
+                    stateId: this.getContext().getScopedStateId('cost-tree-filter'),
                     margin: '15px 10px 0px 0px'
                 }
             },{
@@ -349,7 +359,7 @@ Ext.define('PortfolioItemCostTracking', {
                 headerPosition: 'left',
                 modelNames: modelNames,
                 stateful: true,
-                stateId: this.getContext().getScopedStateId('cost-grid-field-picker'),
+                stateId: this.getContext().getScopedStateId('cost-tree-field-picker'),
                 margin: '15px 0px 10px 10px'
             },{
                 ptype: 'rallygridboardactionsmenu',
@@ -377,22 +387,18 @@ Ext.define('PortfolioItemCostTracking', {
     _getDerivedColumns: function(){
         return [{
             text: "Actual Cost To Date",
-            align: 'right',
             xtype: 'costtemplatecolumn',
             dataIndex: '_rollupDataActualCost'
         },{
             text: "Remaining Cost",
-            align: 'right',
             xtype: 'costtemplatecolumn',
             dataIndex: '_rollupDataRemainingCost'
         }, {
             text: 'Total Projected',
-            align: 'right',
             xtype: 'costtemplatecolumn',
             dataIndex: '_rollupDataTotalCost'
         },{
             text: 'Preliminary Budget',
-            align: 'right',
             xtype: 'costtemplatecolumn',
             dataIndex: '_rollupDataPreliminaryBudget'
         }];

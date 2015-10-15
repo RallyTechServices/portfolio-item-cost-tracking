@@ -16,3 +16,6 @@
 .x-column-header-text {
      margin-right: 0px!important;
 }
+.x-box-inner {
+     overflow: visible;
+}

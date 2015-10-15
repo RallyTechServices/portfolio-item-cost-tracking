@@ -207,8 +207,8 @@ Ext.define('TreeGridContainer', {
                 enableRanking: context.getWorkspace().WorkspaceConfiguration.DragDropRankingEnabled,
                 defaultSortToRank: true,
                 enableBlockedReasonPopover: true,
-                height: this.getAvailableGridBoardHeight()
-
+                height: this.getAvailableGridBoardHeight(),
+                summaryColumns: this._getSummaryColumns()
             }, this.gridConfig);
 
             config.columnCfgs = columnCfgs;
@@ -217,6 +217,10 @@ Ext.define('TreeGridContainer', {
             Ext.Error.raise('No grid store configured');
         }
         return config;
+    },
+    _getSummaryColumns: function(){
+        return [];
+        //return [{field: '_rollupDataActualCost', type: 'sum'}];
     },
 
     _getConfiguredFilters: function (extraFilters, types) {
@@ -236,11 +240,10 @@ Ext.define('TreeGridContainer', {
 
         var grid = this.add(this._getGridConfig());
         this.mon(grid, 'afterproxyload', this._onGridLoad, this);
+
         if (this.currentCustomFilter) {
             this._applyGridFilters(grid, this.currentCustomFilter);
         }
-
-
        return grid;
     },
     _applyGridFilters: function (grid, filterObj) {
@@ -252,11 +255,6 @@ Ext.define('TreeGridContainer', {
     },
     _onGridLoad: function () {
 
-        //var view = this.getGrid().getView(); //Get the view of the treePanel
-        //var feature = view.getFeature(0);   //Get the grouping feature (in our case it is the only child...)
-        //var view2 = feature.view;
-        //var store = view2.store;
-        //store.group('Release');
 
         this.fireEvent('load', this);
 
