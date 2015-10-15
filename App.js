@@ -118,8 +118,9 @@ Ext.define('PortfolioItemCostTracking', {
 
             var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
                 state_val = state ? state.value : null;
-
-            this.fixedHeader.down('#cb-type').setValue(state_val);
+            if (state_val){
+                this.fixedHeader.down('#cb-type').setValue(state_val);
+            }
 
             this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
                 this.fixedHeader.down('#dt-start').on('change', this.updateStoreFilters, this);
@@ -202,11 +203,19 @@ Ext.define('PortfolioItemCostTracking', {
             header.getLeft().add(this.fixedHeader);
         }
     },
+    _getExportFilters: function(){
+        var filters = [];
+
+        if (this.down('treegridcontainer') && this.down('treegridcontainer').currentCustomFilter){
+            filters = this.down('treegridcontainer').currentCustomFilter.filters || [];
+        }
+        return Rally.data.wsapi.Filter.and([this._getDateFilters(),filters]);
+    },
     _showExportMenu: function () {
         var columnCfgs = this.down('treegridcontainer').getGrid().columnCfgs,
             additionalFields = _.pluck(columnCfgs, 'dataIndex');
 
-        var filters = this._getDateFilters(),//Todo: Add custom filter settings
+        var filters = this._getExportFilters(),
             fetch = PortfolioItemCostTracking.Settings.getTreeFetch(additionalFields),
             root_model = this.modelNames[0];
 
@@ -218,7 +227,7 @@ Ext.define('PortfolioItemCostTracking', {
                 exporter.saveCSVToFile(csv, filename);
             },
             failure: function(msg){
-                console.log('failure',msg);
+                Rally.ui.notify.Notifier.showError({message: "An error occurred fetching the data to export:  " + msg});
             }
         });
     },
@@ -331,7 +340,6 @@ Ext.define('PortfolioItemCostTracking', {
                 columnCfgs: this._getColumnCfgs(),
                 derivedColumns: this._getDerivedColumns(),
                 store: store,
-
                 stateful: true,
                 stateId: this.getContext().getScopedStateId('cost-tree-grid')
             },
@@ -343,13 +351,7 @@ Ext.define('PortfolioItemCostTracking', {
                 filterControlConfig: {
                     modelNames: modelNames,
                     stateful: true,
-                    stateId: this.getContext().getScopedStateId('cost-grid-filter'),
-                    margin: '15px 10px 0px 0px'
-                },
-                showOwnerFilter: true,
-                ownerFilterControlConfig: {
-                    stateful: true,
-                    stateId: this.getContext().getScopedStateId('cost-grid-owner-filter'),
+                    stateId: this.getContext().getScopedStateId('cost-tree-filter'),
                     margin: '15px 10px 0px 0px'
                 }
             },{
@@ -357,7 +359,7 @@ Ext.define('PortfolioItemCostTracking', {
                 headerPosition: 'left',
                 modelNames: modelNames,
                 stateful: true,
-                stateId: this.getContext().getScopedStateId('cost-grid-field-picker'),
+                stateId: this.getContext().getScopedStateId('cost-tree-field-picker'),
                 margin: '15px 0px 10px 10px'
             },{
                 ptype: 'rallygridboardactionsmenu',
@@ -385,22 +387,18 @@ Ext.define('PortfolioItemCostTracking', {
     _getDerivedColumns: function(){
         return [{
             text: "Actual Cost To Date",
-            align: 'right',
             xtype: 'costtemplatecolumn',
             dataIndex: '_rollupDataActualCost'
         },{
             text: "Remaining Cost",
-            align: 'right',
             xtype: 'costtemplatecolumn',
             dataIndex: '_rollupDataRemainingCost'
         }, {
             text: 'Total Projected',
-            align: 'right',
             xtype: 'costtemplatecolumn',
             dataIndex: '_rollupDataTotalCost'
         },{
             text: 'Preliminary Budget',
-            align: 'right',
             xtype: 'costtemplatecolumn',
             dataIndex: '_rollupDataPreliminaryBudget'
         }];

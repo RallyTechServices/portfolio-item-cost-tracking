@@ -117,6 +117,21 @@ Ext.define('PortfolioItemCostTracking.Settings', {
     getPortfolioItemTypeObjects: function(){
         return this.portfolioItemTypes;
     },
+    getTypePathDisplayName: function(piTypePath){
+        if (piTypePath.toLowerCase() === 'hierarchicalrequirement'){
+            return 'User Story';
+        }
+
+        var piDisplayName = '';
+
+        Ext.Array.each(this.portfolioItemTypes, function(p){
+            if (p.typePath.toLowerCase() === piTypePath.toLowerCase()){
+                piDisplayName = p.name;
+                return false;
+            }
+        });
+        return piDisplayName;
+    },
     getCalculationTypeSettings: function(){
         return PortfolioItemCostTracking.Settings.calculationTypes[PortfolioItemCostTracking.Settings.selectedCalculationType] || PortfolioItemCostTracking.Settings.calculationTypes.points;
     },
@@ -215,7 +230,7 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         },{
             xtype: 'numberfieldcombobox',
             name: 'preliminaryBudgetField',
-            fieldLabel: 'Preliminary Budget Field',
+            fieldLabel: 'Calculate Preliminary Budget using',
             model: 'PortfolioItem',
             labelWidth: labelWidth,
             margin: '10 0 10 0'
