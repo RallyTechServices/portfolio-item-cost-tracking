@@ -255,7 +255,7 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             fieldLabel: 'Optionally define costs per unit for individual teams (exceptions to the normalized cost)',
             labelAlign: 'top',
             margin: '25 0 0 0',
-           // value: current_project_costs,
+            value: current_project_costs,
             readyEvent: 'ready'
         }];
     }
