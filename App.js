@@ -204,12 +204,14 @@ Ext.define('PortfolioItemCostTracking', {
         }
     },
     _getExportFilters: function(){
-        var filters = [];
+        var filters = this._getDateFilters(),
+            custom_filters = [];
 
         if (this.down('treegridcontainer') && this.down('treegridcontainer').currentCustomFilter){
-            filters = this.down('treegridcontainer').currentCustomFilter.filters || [];
+            custom_filters = this.down('treegridcontainer').currentCustomFilter.filters || [];
         }
-        return Rally.data.wsapi.Filter.and([this._getDateFilters(),filters]);
+        return Ext.Array.merge(filters, custom_filters);
+
     },
     _showExportMenu: function () {
         var columnCfgs = this.down('treegridcontainer').getGrid().columnCfgs,

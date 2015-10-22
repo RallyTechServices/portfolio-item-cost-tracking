@@ -29,7 +29,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
             this.totalUnits = this.getTotalUnits(this.data,this.type.toLowerCase());
             this._rollupDataActualCost = this.calculateCost(this.data, this.actualUnits);
             this._rollupDataTotalCost = this.calculateCost(this.data, this.totalUnits);
-            console.log('rollupDataItem constructor',this._rollupDataActualCost,this._rollupDataTotalCost);
+            //console.log('rollupDataItem constructor',this._rollupDataActualCost,this._rollupDataTotalCost);
             if (this._rollupDataActualCost === null || this._rollupDataTotalCost === null) {
                 this._rollupDataRemainingCost = null;
             } else {
@@ -70,7 +70,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
             this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + (this.calculateCost(childData, total_units) || 0);
             this._rollupDataActualCost = (this._rollupDataActualCost || 0) + (this.calculateCost(childData, actual_units) || 0);
             this._rollupDataRemainingCost = this._rollupDataTotalCost  - this._rollupDataActualCost;
-            console.log('addchild', this._rollupDataRemainingCost);
+            //console.log('addchild', this._rollupDataRemainingCost);
 
         }
 
@@ -85,7 +85,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
      * @param childData
      */
     addChildRollupData: function(childData){
-        console.log('addChildRollupData',childData);
+        //console.log('addChildRollupData',childData);
         this.totalUnits = (this.totalUnits || 0) + childData.totalUnits;
         this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + childData._rollupDataTotalCost ;
 

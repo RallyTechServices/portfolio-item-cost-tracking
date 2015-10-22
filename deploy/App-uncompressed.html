@@ -213,12 +213,14 @@
         }
     },
     _getExportFilters: function(){
-        var filters = [];
+        var filters = this._getDateFilters(),
+            custom_filters = [];
 
         if (this.down('treegridcontainer') && this.down('treegridcontainer').currentCustomFilter){
-            filters = this.down('treegridcontainer').currentCustomFilter.filters || [];
+            custom_filters = this.down('treegridcontainer').currentCustomFilter.filters || [];
         }
-        return Rally.data.wsapi.Filter.and([this._getDateFilters(),filters]);
+        return Ext.Array.merge(filters, custom_filters);
+
     },
     _showExportMenu: function () {
         var columnCfgs = this.down('treegridcontainer').getGrid().columnCfgs,
@@ -537,7 +539,6 @@
                 type: 'task',
                 success: function(model){
                     var field = model.getField('Actuals');
-                    console.log('validate', field);
                     if (field && field.hidden){
                         Rally.ui.notify.Notifier.showWarning({message: 'The Task Actuals field is not visible in the current project.  As a result, Task Actuals values may be 0.'});
                     }
@@ -1163,14 +1164,11 @@
         },
 
         _buildRollupData: function (record) {
-            console.log('_buildRollupData');
             var deferred = Ext.create('Deft.Deferred');
             var key = record.get('ObjectID');
             var item = this.addRollupItem(record);
-            console.log('item', item, record.get('_type'), record.get('UserStories'));
             if (PortfolioItemCostTracking.Utilities.isPortfolioItem(record.get('_type'))) {
                 if (record.get('UserStories')) {  //If this is the lowest level PI, then get the first level User Stories
-                    console.log('_fetchTopLevelUserStories');
                     this._fetchTopLevelUserStories([key]).then({
                         scope: this,
                         success: function () {
@@ -1184,7 +1182,7 @@
                 } else { //else this does not have a UserStories field and is not the lowest level PI
                     if (record.get('Children') && record.get('Children').Count > 0) {
                         var child_model_type = this._getChildPortfolioModelType(record.get('_type'));
-                        console.log('_fetchChildPortfolioItems');
+                        //console.log('_fetchChildPortfolioItems');
                         this._fetchChildPortfolioItems(child_model_type, [key]).then({
                             scope: this,
                             success: function () {
@@ -1245,8 +1243,7 @@
         _fetchChildPortfolioItems: function (portfolioItemType, portfolioItemObjectIDs) {
 
             var portfolioItemFetch = PortfolioItemCostTracking.Settings.getPortfolioItemFetch(this.additionalFetch);
-            console.log('portfolioItemFetch', portfolioItemFetch, this.additionalFetch);
-            var filters = _.map(portfolioItemObjectIDs, function (poid) {
+             var filters = _.map(portfolioItemObjectIDs, function (poid) {
                 return {
                     property: 'Parent.ObjectID',
                     value: poid
@@ -1293,7 +1290,6 @@
             });
             filters = Rally.data.wsapi.Filter.or(filters);
             var storyFetch = PortfolioItemCostTracking.Settings.getStoryFetch(this.additionalFetch);
-            console.log('storyFetch', storyFetch, this.additionalFetch);
             PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords('HierarchicalRequirement', filters, storyFetch, {project: null}).then({
                 scope: this,
                 success: function (records) {
@@ -1345,7 +1341,7 @@
             this.totalUnits = this.getTotalUnits(this.data,this.type.toLowerCase());
             this._rollupDataActualCost = this.calculateCost(this.data, this.actualUnits);
             this._rollupDataTotalCost = this.calculateCost(this.data, this.totalUnits);
-            console.log('rollupDataItem constructor',this._rollupDataActualCost,this._rollupDataTotalCost);
+            //console.log('rollupDataItem constructor',this._rollupDataActualCost,this._rollupDataTotalCost);
             if (this._rollupDataActualCost === null || this._rollupDataTotalCost === null) {
                 this._rollupDataRemainingCost = null;
             } else {
@@ -1386,7 +1382,7 @@
             this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + (this.calculateCost(childData, total_units) || 0);
             this._rollupDataActualCost = (this._rollupDataActualCost || 0) + (this.calculateCost(childData, actual_units) || 0);
             this._rollupDataRemainingCost = this._rollupDataTotalCost  - this._rollupDataActualCost;
-            console.log('addchild', this._rollupDataRemainingCost);
+            //console.log('addchild', this._rollupDataRemainingCost);
 
         }
 
@@ -1401,7 +1397,7 @@
      * @param childData
      */
     addChildRollupData: function(childData){
-        console.log('addChildRollupData',childData);
+        //console.log('addChildRollupData',childData);
         this.totalUnits = (this.totalUnits || 0) + childData.totalUnits;
         this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + childData._rollupDataTotalCost ;
 
@@ -1777,8 +1773,6 @@ Ext.define('ProjectPickerDialog', {
 
     _onGridSelect: function(selectionModel, record) {
         var index = this._findRecordInSelectionCache(record);
-
-        console.log('selectionModel',selectionModel, record);
 
         if (index === -1) {
             if (!this.multiple) {
@@ -2554,7 +2548,34 @@ Ext.define('TreeGridContainerCustomFilterControl', {
     },
     saveAs: function(textToWrite, fileName)
     {
-        var textFileAsBlob = new Blob([textToWrite], {type:'text/plain'});
+
+        if (Ext.isIE9m){
+            Rally.ui.notify.Notifier.showWarning({message: "Export is not supported for IE9 and below."});
+            return;
+        }
+
+        var textFileAsBlob = null;
+        try {
+            textFileAsBlob = new Blob([textToWrite], {type:'text/plain'});
+        }
+        catch(e){
+            window.BlobBuilder = window.BlobBuilder ||
+                        window.WebKitBlobBuilder ||
+                    window.MozBlobBuilder ||
+                    window.MSBlobBuilder;
+            if (window.BlobBuilder && e.name == 'TypeError'){
+                bb = new BlobBuilder();
+                bb.append([textToWrite]);
+                textFileAsBlob = bb.getBlob("text/plain");
+            }
+
+        }
+
+        if (!textFileAsBlob){
+            Rally.ui.notify.Notifier.showWarning({message: "Export is not supported for this browser."});
+            return;
+        }
+
         var fileNameToSaveAs = fileName;
 
         if (Ext.isIE10p){
@@ -2605,7 +2626,6 @@ Ext.define('TreeGridContainerCustomFilterControl', {
         var deferred = Ext.create('Deft.Deferred');
         var recordCounter = 0;
         var rootFetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getPortfolioItemFetch());
-
 
         PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords(rootModel, rootFilters || [], rootFetch).then({
             scope: this,
