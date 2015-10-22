@@ -32,11 +32,9 @@ Cost per unit to use for calculating all costs where a specific project cost per
 ######Exceptions to the normalized cost
 To specify project costs different than the value in the Normalized Cost Per Unit, click the Select Projects button to add projects to the exceptions list.  Once in the exceptions list, update the grid with the desired cost per unit for each project.  
 
-
 ###Cost Calcuation type details
 For all Cost Calcuation options, the following definition applies:
 Cost Per Unit = Cost per unit for the current project scope.  If the cost per unit is defined for the specific project in the Exceptions area of the App Settings, then that number will be used.  Otherwise, the Normalized Cost Per Unit will be used. 
-
 
 ####Based On Story Points
 When Based On Story Points, the costs are calculated as followed:

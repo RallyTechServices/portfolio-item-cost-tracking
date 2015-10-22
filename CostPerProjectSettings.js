@@ -1,10 +1,6 @@
 Ext.define('PortfolioItemCostTracking.CostPerProjectSettings',{
     extend: 'Ext.form.field.Base',
     alias: 'widget.costperprojectsettings',
-    config: {
-        value: undefined,
-        decodedValue: {}
-    },
     fieldSubTpl: '<div id="{id}" class="settings-grid"></div>',
     width: '100%',
     cls: 'column-settings',
@@ -41,14 +37,12 @@ Ext.define('PortfolioItemCostTracking.CostPerProjectSettings',{
     _buildProjectGrid: function(records, operation, success){
 
         var decodedValue = {};
-
-        if (this.value && !_.isEmpty(this.value)){
-            if (!Ext.isObject(this.value)){
-                decodedValue = Ext.JSON.decode(this.value);
+        if (this.initialConfig && this.initialConfig.value && !_.isEmpty(this.initialConfig.value)){
+            if (!Ext.isObject(this.initialConfig.value)){
+                decodedValue = Ext.JSON.decode(this.initialConfig.value);
             } else {
-                decodedValue = this.value;
+                decodedValue = this.initialConfig.value;
             }
-           // console.log('decodedValue',decodedValue);
         }
 
         var data = [],
