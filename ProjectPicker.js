@@ -292,8 +292,6 @@ Ext.define('ProjectPickerDialog', {
     _onGridSelect: function(selectionModel, record) {
         var index = this._findRecordInSelectionCache(record);
 
-        console.log('selectionModel',selectionModel, record);
-
         if (index === -1) {
             if (!this.multiple) {
                 this.selectionCache = [];

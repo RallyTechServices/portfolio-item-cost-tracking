@@ -66,14 +66,11 @@
         },
 
         _buildRollupData: function (record) {
-            console.log('_buildRollupData');
             var deferred = Ext.create('Deft.Deferred');
             var key = record.get('ObjectID');
             var item = this.addRollupItem(record);
-            console.log('item', item, record.get('_type'), record.get('UserStories'));
             if (PortfolioItemCostTracking.Utilities.isPortfolioItem(record.get('_type'))) {
                 if (record.get('UserStories')) {  //If this is the lowest level PI, then get the first level User Stories
-                    console.log('_fetchTopLevelUserStories');
                     this._fetchTopLevelUserStories([key]).then({
                         scope: this,
                         success: function () {
@@ -87,7 +84,7 @@
                 } else { //else this does not have a UserStories field and is not the lowest level PI
                     if (record.get('Children') && record.get('Children').Count > 0) {
                         var child_model_type = this._getChildPortfolioModelType(record.get('_type'));
-                        console.log('_fetchChildPortfolioItems');
+                        //console.log('_fetchChildPortfolioItems');
                         this._fetchChildPortfolioItems(child_model_type, [key]).then({
                             scope: this,
                             success: function () {
@@ -148,8 +145,7 @@
         _fetchChildPortfolioItems: function (portfolioItemType, portfolioItemObjectIDs) {
 
             var portfolioItemFetch = PortfolioItemCostTracking.Settings.getPortfolioItemFetch(this.additionalFetch);
-            console.log('portfolioItemFetch', portfolioItemFetch, this.additionalFetch);
-            var filters = _.map(portfolioItemObjectIDs, function (poid) {
+             var filters = _.map(portfolioItemObjectIDs, function (poid) {
                 return {
                     property: 'Parent.ObjectID',
                     value: poid
@@ -196,7 +192,6 @@
             });
             filters = Rally.data.wsapi.Filter.or(filters);
             var storyFetch = PortfolioItemCostTracking.Settings.getStoryFetch(this.additionalFetch);
-            console.log('storyFetch', storyFetch, this.additionalFetch);
             PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords('HierarchicalRequirement', filters, storyFetch, {project: null}).then({
                 scope: this,
                 success: function (records) {

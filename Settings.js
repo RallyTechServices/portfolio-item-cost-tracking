@@ -96,7 +96,6 @@ Ext.define('PortfolioItemCostTracking.Settings', {
                 type: 'task',
                 success: function(model){
                     var field = model.getField('Actuals');
-                    console.log('validate', field);
                     if (field && field.hidden){
                         Rally.ui.notify.Notifier.showWarning({message: 'The Task Actuals field is not visible in the current project.  As a result, Task Actuals values may be 0.'});
                     }

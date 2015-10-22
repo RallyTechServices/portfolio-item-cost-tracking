@@ -59,7 +59,6 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
         var recordCounter = 0;
         var rootFetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getPortfolioItemFetch());
 
-
         PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords(rootModel, rootFilters || [], rootFetch).then({
             scope: this,
             success: function(records){
