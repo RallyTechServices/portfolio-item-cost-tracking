@@ -58,10 +58,8 @@
     },
     _createPickers: function(piType){
 
-        var startDate = this.getStartDate(),
-            endDate = this.getEndDate();
-
-
+        //var startDate = this.getStartDate(),
+        //    endDate = this.getEndDate();
         this.fixedHeader = Ext.create('Ext.container.Container',{
             itemId: 'header-controls',
             width: 460,
@@ -70,37 +68,37 @@
             padding: '0 0 20 20',
             margin: 10,
             items: [{
-                xtype: 'rallydatefield',
-                itemId: 'dt-start',
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('dt-start'),
-                stateEvents: ['change'],
-                margin: '0 10 0 0',
-                padding: 5,
-                fieldLabel: 'Start Date',
-                labelSeparator: '',
-                labelCls: 'lbl',
-                labelAlign: 'top',
-                listeners: {
-                    scope: this,
-                    ready: this._attachListeners
-                }
-            },{
-                xtype: 'rallydatefield',
-                itemId: 'dt-end',
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('dt-end'),
-                stateEvents: ['change'],
-                margin: '0 10 0 0',
-                labelSeparator: '',
-                labelCls: 'lbl',
-                fieldLabel: 'End Date',
-                labelAlign: 'top',
-                listeners: {
-                    scope: this,
-                    ready: this._attachListeners
-                }
-            },{
+            //    xtype: 'rallydatefield',
+            //    itemId: 'dt-start',
+            //    stateful: true,
+            //    stateId: this.getContext().getScopedStateId('dt-start'),
+            //    stateEvents: ['change'],
+            //    margin: '0 10 0 0',
+            //    padding: 5,
+            //    fieldLabel: 'Start Date',
+            //    labelSeparator: '',
+            //    labelCls: 'lbl',
+            //    labelAlign: 'top',
+            //    listeners: {
+            //        scope: this,
+            //        ready: this._attachListeners
+            //    }
+            //},{
+            //    xtype: 'rallydatefield',
+            //    itemId: 'dt-end',
+            //    stateful: true,
+            //    stateId: this.getContext().getScopedStateId('dt-end'),
+            //    stateEvents: ['change'],
+            //    margin: '0 10 0 0',
+            //    labelSeparator: '',
+            //    labelCls: 'lbl',
+            //    fieldLabel: 'End Date',
+            //    labelAlign: 'top',
+            //    listeners: {
+            //        scope: this,
+            //        ready: this._attachListeners
+            //    }
+            //},{
                 xtype: 'rallyportfolioitemtypecombobox',
                 itemId: 'cb-type',
                 stateful: true,
@@ -117,13 +115,13 @@
             }]
         });
 
-        this.fixedHeader.down('#dt-start').setValue(startDate);
-        this.fixedHeader.down('#dt-end').setValue(endDate);
+        //this.fixedHeader.down('#dt-start').setValue(startDate);
+        //this.fixedHeader.down('#dt-end').setValue(endDate);
 
     },
     _attachListeners: function(){
-        if (this.fixedHeader && this.fixedHeader.down('#cb-type') &&
-            this.fixedHeader.down('#dt-start') && this.fixedHeader.down('#dt-end')){
+        if (this.fixedHeader && this.fixedHeader.down('#cb-type')){
+          //  this.fixedHeader.down('#dt-start') && this.fixedHeader.down('#dt-end')){
 
             var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
                 state_val = state ? state.value : null;
@@ -132,8 +130,8 @@
             }
 
             this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
-                this.fixedHeader.down('#dt-start').on('change', this.updateStoreFilters, this);
-                this.fixedHeader.down('#dt-end').on('change', this.updateStoreFilters, this);
+                //this.fixedHeader.down('#dt-start').on('change', this.updateStoreFilters, this);
+                //this.fixedHeader.down('#dt-end').on('change', this.updateStoreFilters, this);
                 this._onTypeChange(this.fixedHeader.down('#cb-type'));
         }
     },
@@ -185,26 +183,26 @@
 
         this._updateStore(modelNames);
     },
-    getStartDate: function(){
-        return this.getDate('dt-start',this.defaults.startDate);
-    },
-    getEndDate: function(){
-        return this.getDate('dt-end',this.defaults.endDate);
-    },
-    getDate: function(itemId, defaultDate){
-        var dt = defaultDate || null,
-            cmpId = '#' + itemId;
-
-        if (this.fixedHeader && this.fixedHeader.down(cmpId)){
-            dt = this.fixedHeader.down(cmpId).getValue();
-        } else {
-            var state = Ext.state.Manager.get(this.getContext().getScopedStateId(itemId));
-            if (state && state.value){
-                dt = new Date(state.value);
-            }
-        }
-        return dt;
-    },
+    //getStartDate: function(){
+    //    return this.getDate('dt-start',this.defaults.startDate);
+    //},
+    //getEndDate: function(){
+    //    return this.getDate('dt-end',this.defaults.endDate);
+    //},
+    //getDate: function(itemId, defaultDate){
+    //    var dt = defaultDate || null,
+    //        cmpId = '#' + itemId;
+    //
+    //    if (this.fixedHeader && this.fixedHeader.down(cmpId)){
+    //        dt = this.fixedHeader.down(cmpId).getValue();
+    //    } else {
+    //        var state = Ext.state.Manager.get(this.getContext().getScopedStateId(itemId));
+    //        if (state && state.value){
+    //            dt = new Date(state.value);
+    //        }
+    //    }
+    //    return dt;
+    //},
     addHeader: function (gb) {
         var header = gb.getHeader();
 
@@ -213,13 +211,14 @@
         }
     },
     _getExportFilters: function(){
-        var filters = this._getDateFilters(),
-            custom_filters = [];
+        //var filters = this._getDateFilters(),
+        var    custom_filters = [];
 
         if (this.down('treegridcontainer') && this.down('treegridcontainer').currentCustomFilter){
             custom_filters = this.down('treegridcontainer').currentCustomFilter.filters || [];
         }
-        return Ext.Array.merge(filters, custom_filters);
+        return custom_filters;
+        //return Ext.Array.merge(filters, custom_filters);
 
     },
     _showExportMenu: function () {
@@ -243,59 +242,59 @@
         });
     },
 
-    _getDateFilters: function(){
-
-        var start_date = this.getStartDate(),
-            end_date = this.getEndDate();
-
-        if(start_date === null && end_date === null){
-            return null;
-        }
-
-        var filter_actual = [],
-            filter_planned = [{
-                property: 'ActualEndDate',
-                value: null
-            }];
-
-        if (start_date){
-            filter_actual.push({
-                property: 'ActualEndDate',
-                operator: '>=',
-                value: Rally.util.DateTime.toIsoString(start_date)
-            });
-            filter_planned.push({
-                property: 'PlannedEndDate',
-                operator: '>=',
-                value: Rally.util.DateTime.toIsoString(start_date)
-            });
-        }
-
-        if (end_date){
-            filter_actual.push({
-                property: 'ActualEndDate',
-                operator: '<',
-                value: Rally.util.DateTime.toIsoString(end_date)
-            });
-            filter_planned.push({
-                property: 'PlannedEndDate',
-                operator: '<',
-                value: Rally.util.DateTime.toIsoString(end_date)
-            });
-        }
-
-        if (filter_actual.length > 1){
-            filter_actual = Rally.data.wsapi.Filter.and(filter_actual);
-        }
-        if (filter_planned.length > 1){
-            filter_planned = Rally.data.wsapi.Filter.and(filter_planned);
-        }
-        return filter_planned.or(filter_actual);
-    },
+    //_getDateFilters: function(){
+    //
+    //    var start_date = this.getStartDate(),
+    //        end_date = this.getEndDate();
+    //
+    //    if(start_date === null && end_date === null){
+    //        return null;
+    //    }
+    //
+    //    var filter_actual = [],
+    //        filter_planned = [{
+    //            property: 'ActualEndDate',
+    //            value: null
+    //        }];
+    //
+    //    if (start_date){
+    //        filter_actual.push({
+    //            property: 'ActualEndDate',
+    //            operator: '>=',
+    //            value: Rally.util.DateTime.toIsoString(start_date)
+    //        });
+    //        filter_planned.push({
+    //            property: 'PlannedEndDate',
+    //            operator: '>=',
+    //            value: Rally.util.DateTime.toIsoString(start_date)
+    //        });
+    //    }
+    //
+    //    if (end_date){
+    //        filter_actual.push({
+    //            property: 'ActualEndDate',
+    //            operator: '<',
+    //            value: Rally.util.DateTime.toIsoString(end_date)
+    //        });
+    //        filter_planned.push({
+    //            property: 'PlannedEndDate',
+    //            operator: '<',
+    //            value: Rally.util.DateTime.toIsoString(end_date)
+    //        });
+    //    }
+    //
+    //    if (filter_actual.length > 1){
+    //        filter_actual = Rally.data.wsapi.Filter.and(filter_actual);
+    //    }
+    //    if (filter_planned.length > 1){
+    //        filter_planned = Rally.data.wsapi.Filter.and(filter_planned);
+    //    }
+    //    return filter_planned.or(filter_actual);
+    //},
     updateStoreFilters: function(){
 
         if (this.down('treegridcontainer')){
-            this.down('treegridcontainer').storeConfig.filters = this._getDateFilters();
+          //  this.down('treegridcontainer').storeConfig.filters = this._getDateFilters();
             this.down('treegridcontainer').applyCustomFilter(this.down('treegridcontainer').currentCustomFilter);
         }
     },
@@ -312,13 +311,12 @@
 
     },
     _updateStore: function(modelNames){
-        var filters = this._getDateFilters();
+      //  var filters = this._getDateFilters();
 
         var field_names = [];
-
-        if (filters === null){
-            return;
-        }
+        //if (filters === null){
+        //    return;
+        //}
         Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
             models: modelNames,
             //filters: filters,
@@ -354,9 +352,9 @@
                 stateful: true,
                 stateId: this.getContext().getScopedStateId('cost-tree-grid')
             },
-            storeConfig: {
-                filters: this._getDateFilters()
-            },
+            //storeConfig: {
+            //    filters: this._getDateFilters()
+            //},
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
                 filterControlConfig: {
@@ -1220,10 +1218,11 @@
         },
 
         _setDataOnModel: function (record, data) {
-            record.set('_rollupDataPreliminaryBudget', data._rollupDataPreliminaryBudget);
-            record.set('_rollupDataTotalCost', data._rollupDataTotalCost);
-            record.set('_rollupDataActualCost', data._rollupDataActualCost);
-            record.set('_rollupDataRemainingCost', data._rollupDataRemainingCost);
+            record.set('_rollupDataPreliminaryBudget', data.getPreliminaryBudget());
+            record.set('_rollupDataTotalCost', data.getTotalCostRollup());
+            record.set('_rollupDataActualCost', data.getActualCostRollup());
+            record.set('_rollupDataRemainingCost', data.getRemainingCostRollup());
+            record.set('_notEstimated', data.usePreliminaryBudgetInCalcuation());
             record.set('_rollupDataToolTip', data.getTooltip() || null);
         },
 
@@ -1323,6 +1322,7 @@
     _rollupDataRemainingCost: 0,
     tooltip: undefined,
     projectCosts: undefined,
+    useTraditionalCalc: false,
     /**
      * data is from the record associated with the rollup data
      */
@@ -1341,7 +1341,6 @@
             this.totalUnits = this.getTotalUnits(this.data,this.type.toLowerCase());
             this._rollupDataActualCost = this.calculateCost(this.data, this.actualUnits);
             this._rollupDataTotalCost = this.calculateCost(this.data, this.totalUnits);
-            //console.log('rollupDataItem constructor',this._rollupDataActualCost,this._rollupDataTotalCost);
             if (this._rollupDataActualCost === null || this._rollupDataTotalCost === null) {
                 this._rollupDataRemainingCost = null;
             } else {
@@ -1373,6 +1372,7 @@
 
         if (record.get('_type').toLowerCase() === 'hierarchicalrequirement'){
             this._updateProjectNameAndCostHash(childData.Project);
+
             var total_units = this.getTotalUnits(childData, childType) || 0,
                 actual_units = this.getActualUnits(childData, childType) || 0;
 
@@ -1382,8 +1382,6 @@
             this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + (this.calculateCost(childData, total_units) || 0);
             this._rollupDataActualCost = (this._rollupDataActualCost || 0) + (this.calculateCost(childData, actual_units) || 0);
             this._rollupDataRemainingCost = this._rollupDataTotalCost  - this._rollupDataActualCost;
-            //console.log('addchild', this._rollupDataRemainingCost);
-
         }
 
         if (!this.children){
@@ -1391,22 +1389,45 @@
         }
         this.children.push(childData.ObjectID);
     },
-
+    getTotalCostRollup: function(useBudgetCalc){
+        if (this.usePreliminaryBudgetInCalcuation(useBudgetCalc)){
+            return this.getActualCostRollup() + this.getRemainingCostRollup();
+        }
+        return this._rollupDataTotalCost;
+    },
+    getActualCostRollup: function(){
+        return this._rollupDataActualCost;
+    },
+    getRemainingCostRollup: function(useBudgetCalc){
+        if (this.usePreliminaryBudgetInCalcuation(useBudgetCalc)){
+            return this.getPreliminaryBudget() - this.getActualCostRollup();
+        }
+        return this._rollupDataRemainingCost;
+    },
+    getPreliminaryBudget: function(){
+        return this._rollupDataPreliminaryBudget;
+    },
     /**
      * addChildRollupData
      * @param childData
      */
     addChildRollupData: function(childData){
-        //console.log('addChildRollupData',childData);
+        console.log('addChildRollupData',childData._type);
         this.totalUnits = (this.totalUnits || 0) + childData.totalUnits;
-        this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + childData._rollupDataTotalCost ;
+        this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + childData.getTotalCostRollup() ;
 
         this.actualUnits = (this.actualUnits || 0) + childData.actualUnits;
-        this._rollupDataActualCost = (this._rollupDataActualCost || 0) + childData._rollupDataActualCost;
+        this._rollupDataActualCost = (this._rollupDataActualCost || 0) + childData.getActualCostRollup();
 
-        this._rollupDataRemainingCost = (this._rollupDataRemainingCost || 0) + childData._rollupDataRemainingCost;
+        this._rollupDataRemainingCost = (this._rollupDataRemainingCost || 0) + childData.getRemainingCostRollup();
 
         this.projectCosts = Ext.merge(this.projectCosts || {}, childData.projectCosts || {});
+    },
+    usePreliminaryBudgetInCalcuation: function(useBudgetCalc){
+        if (useBudgetCalc || (this._rollupDataTotalCost <= 0  && this.getPreliminaryBudget() > this.getActualCostRollup())){
+            return true;
+        }
+        return false;
     },
     getTooltip: function(){
         var completed  = PortfolioItemCostTracking.Settings.notAvailableText;
@@ -1421,6 +1442,9 @@
             html += Ext.String.format('{0} {1}<br/>', PortfolioItemCostTracking.Settings.formatCost(project_cost), project_name);
         });
 
+        if (this.usePreliminaryBudgetInCalcuation()){
+             html += '<br/><p>Portfolio Item has missing ' + calc_type_name + '.  Preliminary Budget is being used to calculate Projected and Remaining costs.</p>';
+        }
         return html;
 
     },
@@ -1443,7 +1467,7 @@
         return units * PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
     },
     getActualUnits: function(data, modelType){
-        var calcType = PortfolioItemCostTracking.Settings.getCalculationTypeSettings(),
+         var calcType = PortfolioItemCostTracking.Settings.getCalculationTypeSettings(),
             fn = 'actualUnitsForStoryFn';
 
         if (modelType.toLowerCase() === 'task'){
@@ -1467,6 +1491,7 @@
         }
         return null;
     },
+
     calculatePreliminaryBudget: function(data){
         var preliminaryBudgetField = PortfolioItemCostTracking.Settings.preliminaryBudgetField;
 
@@ -1981,7 +2006,11 @@ Ext.define('Rally.data.wsapi.ProjectTreeStoreBuilder', {
                 if (values[this.costField] === null){
                     return PortfolioItemCostTracking.Settings.notAvailableText;
                 } else {
-                    return PortfolioItemCostTracking.Settings.formatCost(values[this.costField] || 0);
+                    var html = PortfolioItemCostTracking.Settings.formatCost(values[this.costField] || 0);
+                    if (values._notEstimated && this.costField === '_rollupDataTotalCost'){
+                        html = '<span class="picto icon-warning warning" style="color:#FAD200;font-size:10px;"></span>' + html;
+                    }
+                    return html;
                 }
             },
             getTooltip: function(values){
@@ -2548,7 +2577,6 @@ Ext.define('TreeGridContainerCustomFilterControl', {
     },
     saveAs: function(textToWrite, fileName)
     {
-
         if (Ext.isIE9m){
             Rally.ui.notify.Notifier.showWarning({message: "Export is not supported for IE9 and below."});
             return;
@@ -2834,6 +2862,9 @@ Ext.define('TreeGridContainerCustomFilterControl', {
 }
 .x-box-inner {
   overflow: visible;
+}
+p {
+  color: #FAD200;
 }
 
     </style>

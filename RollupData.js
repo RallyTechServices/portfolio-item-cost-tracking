@@ -122,10 +122,11 @@
         },
 
         _setDataOnModel: function (record, data) {
-            record.set('_rollupDataPreliminaryBudget', data._rollupDataPreliminaryBudget);
-            record.set('_rollupDataTotalCost', data._rollupDataTotalCost);
-            record.set('_rollupDataActualCost', data._rollupDataActualCost);
-            record.set('_rollupDataRemainingCost', data._rollupDataRemainingCost);
+            record.set('_rollupDataPreliminaryBudget', data.getPreliminaryBudget());
+            record.set('_rollupDataTotalCost', data.getTotalCostRollup());
+            record.set('_rollupDataActualCost', data.getActualCostRollup());
+            record.set('_rollupDataRemainingCost', data.getRemainingCostRollup());
+            record.set('_notEstimated', data.usePreliminaryBudgetInCalcuation());
             record.set('_rollupDataToolTip', data.getTooltip() || null);
         },
 

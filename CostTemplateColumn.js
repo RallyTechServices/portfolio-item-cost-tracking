@@ -15,7 +15,11 @@ Ext.define('Ext.CostTemplate', {
                 if (values[this.costField] === null){
                     return PortfolioItemCostTracking.Settings.notAvailableText;
                 } else {
-                    return PortfolioItemCostTracking.Settings.formatCost(values[this.costField] || 0);
+                    var html = PortfolioItemCostTracking.Settings.formatCost(values[this.costField] || 0);
+                    if (values._notEstimated && this.costField === '_rollupDataTotalCost'){
+                        html = '<span class="picto icon-warning warning" style="color:#FAD200;font-size:10px;"></span>' + html;
+                    }
+                    return html;
                 }
             },
             getTooltip: function(values){

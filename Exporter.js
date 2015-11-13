@@ -7,7 +7,6 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
     },
     saveAs: function(textToWrite, fileName)
     {
-
         if (Ext.isIE9m){
             Rally.ui.notify.Notifier.showWarning({message: "Export is not supported for IE9 and below."});
             return;
