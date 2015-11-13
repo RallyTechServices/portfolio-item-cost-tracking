@@ -11,6 +11,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
     _rollupDataRemainingCost: 0,
     tooltip: undefined,
     projectCosts: undefined,
+    useTraditionalCalc: false,
     /**
      * data is from the record associated with the rollup data
      */
@@ -29,7 +30,6 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
             this.totalUnits = this.getTotalUnits(this.data,this.type.toLowerCase());
             this._rollupDataActualCost = this.calculateCost(this.data, this.actualUnits);
             this._rollupDataTotalCost = this.calculateCost(this.data, this.totalUnits);
-            //console.log('rollupDataItem constructor',this._rollupDataActualCost,this._rollupDataTotalCost);
             if (this._rollupDataActualCost === null || this._rollupDataTotalCost === null) {
                 this._rollupDataRemainingCost = null;
             } else {
@@ -61,6 +61,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
 
         if (record.get('_type').toLowerCase() === 'hierarchicalrequirement'){
             this._updateProjectNameAndCostHash(childData.Project);
+
             var total_units = this.getTotalUnits(childData, childType) || 0,
                 actual_units = this.getActualUnits(childData, childType) || 0;
 
@@ -70,8 +71,6 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
             this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + (this.calculateCost(childData, total_units) || 0);
             this._rollupDataActualCost = (this._rollupDataActualCost || 0) + (this.calculateCost(childData, actual_units) || 0);
             this._rollupDataRemainingCost = this._rollupDataTotalCost  - this._rollupDataActualCost;
-            //console.log('addchild', this._rollupDataRemainingCost);
-
         }
 
         if (!this.children){
@@ -79,22 +78,45 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
         }
         this.children.push(childData.ObjectID);
     },
-
+    getTotalCostRollup: function(useBudgetCalc){
+        if (this.usePreliminaryBudgetInCalcuation(useBudgetCalc)){
+            return this.getActualCostRollup() + this.getRemainingCostRollup();
+        }
+        return this._rollupDataTotalCost;
+    },
+    getActualCostRollup: function(){
+        return this._rollupDataActualCost;
+    },
+    getRemainingCostRollup: function(useBudgetCalc){
+        if (this.usePreliminaryBudgetInCalcuation(useBudgetCalc)){
+            return this.getPreliminaryBudget() - this.getActualCostRollup();
+        }
+        return this._rollupDataRemainingCost;
+    },
+    getPreliminaryBudget: function(){
+        return this._rollupDataPreliminaryBudget;
+    },
     /**
      * addChildRollupData
      * @param childData
      */
     addChildRollupData: function(childData){
-        //console.log('addChildRollupData',childData);
+        console.log('addChildRollupData',childData._type);
         this.totalUnits = (this.totalUnits || 0) + childData.totalUnits;
-        this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + childData._rollupDataTotalCost ;
+        this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + childData.getTotalCostRollup() ;
 
         this.actualUnits = (this.actualUnits || 0) + childData.actualUnits;
-        this._rollupDataActualCost = (this._rollupDataActualCost || 0) + childData._rollupDataActualCost;
+        this._rollupDataActualCost = (this._rollupDataActualCost || 0) + childData.getActualCostRollup();
 
-        this._rollupDataRemainingCost = (this._rollupDataRemainingCost || 0) + childData._rollupDataRemainingCost;
+        this._rollupDataRemainingCost = (this._rollupDataRemainingCost || 0) + childData.getRemainingCostRollup();
 
         this.projectCosts = Ext.merge(this.projectCosts || {}, childData.projectCosts || {});
+    },
+    usePreliminaryBudgetInCalcuation: function(useBudgetCalc){
+        if (useBudgetCalc || (this._rollupDataTotalCost <= 0  && this.getPreliminaryBudget() > this.getActualCostRollup())){
+            return true;
+        }
+        return false;
     },
     getTooltip: function(){
         var completed  = PortfolioItemCostTracking.Settings.notAvailableText;
@@ -109,6 +131,9 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
             html += Ext.String.format('{0} {1}<br/>', PortfolioItemCostTracking.Settings.formatCost(project_cost), project_name);
         });
 
+        if (this.usePreliminaryBudgetInCalcuation()){
+             html += '<br/><p>Portfolio Item has missing ' + calc_type_name + '.  Preliminary Budget is being used to calculate Projected and Remaining costs.</p>';
+        }
         return html;
 
     },
@@ -131,7 +156,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
         return units * PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
     },
     getActualUnits: function(data, modelType){
-        var calcType = PortfolioItemCostTracking.Settings.getCalculationTypeSettings(),
+         var calcType = PortfolioItemCostTracking.Settings.getCalculationTypeSettings(),
             fn = 'actualUnitsForStoryFn';
 
         if (modelType.toLowerCase() === 'task'){
@@ -155,6 +180,7 @@ Ext.define('PortfolioItemCostTracking.RollupDataItem',{
         }
         return null;
     },
+
     calculatePreliminaryBudget: function(data){
         var preliminaryBudgetField = PortfolioItemCostTracking.Settings.preliminaryBudgetField;
 

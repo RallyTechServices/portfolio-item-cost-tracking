@@ -49,10 +49,8 @@ Ext.define('PortfolioItemCostTracking', {
     },
     _createPickers: function(piType){
 
-        var startDate = this.getStartDate(),
-            endDate = this.getEndDate();
-
-
+        //var startDate = this.getStartDate(),
+        //    endDate = this.getEndDate();
         this.fixedHeader = Ext.create('Ext.container.Container',{
             itemId: 'header-controls',
             width: 460,
@@ -61,37 +59,37 @@ Ext.define('PortfolioItemCostTracking', {
             padding: '0 0 20 20',
             margin: 10,
             items: [{
-                xtype: 'rallydatefield',
-                itemId: 'dt-start',
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('dt-start'),
-                stateEvents: ['change'],
-                margin: '0 10 0 0',
-                padding: 5,
-                fieldLabel: 'Start Date',
-                labelSeparator: '',
-                labelCls: 'lbl',
-                labelAlign: 'top',
-                listeners: {
-                    scope: this,
-                    ready: this._attachListeners
-                }
-            },{
-                xtype: 'rallydatefield',
-                itemId: 'dt-end',
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('dt-end'),
-                stateEvents: ['change'],
-                margin: '0 10 0 0',
-                labelSeparator: '',
-                labelCls: 'lbl',
-                fieldLabel: 'End Date',
-                labelAlign: 'top',
-                listeners: {
-                    scope: this,
-                    ready: this._attachListeners
-                }
-            },{
+            //    xtype: 'rallydatefield',
+            //    itemId: 'dt-start',
+            //    stateful: true,
+            //    stateId: this.getContext().getScopedStateId('dt-start'),
+            //    stateEvents: ['change'],
+            //    margin: '0 10 0 0',
+            //    padding: 5,
+            //    fieldLabel: 'Start Date',
+            //    labelSeparator: '',
+            //    labelCls: 'lbl',
+            //    labelAlign: 'top',
+            //    listeners: {
+            //        scope: this,
+            //        ready: this._attachListeners
+            //    }
+            //},{
+            //    xtype: 'rallydatefield',
+            //    itemId: 'dt-end',
+            //    stateful: true,
+            //    stateId: this.getContext().getScopedStateId('dt-end'),
+            //    stateEvents: ['change'],
+            //    margin: '0 10 0 0',
+            //    labelSeparator: '',
+            //    labelCls: 'lbl',
+            //    fieldLabel: 'End Date',
+            //    labelAlign: 'top',
+            //    listeners: {
+            //        scope: this,
+            //        ready: this._attachListeners
+            //    }
+            //},{
                 xtype: 'rallyportfolioitemtypecombobox',
                 itemId: 'cb-type',
                 stateful: true,
@@ -108,13 +106,13 @@ Ext.define('PortfolioItemCostTracking', {
             }]
         });
 
-        this.fixedHeader.down('#dt-start').setValue(startDate);
-        this.fixedHeader.down('#dt-end').setValue(endDate);
+        //this.fixedHeader.down('#dt-start').setValue(startDate);
+        //this.fixedHeader.down('#dt-end').setValue(endDate);
 
     },
     _attachListeners: function(){
-        if (this.fixedHeader && this.fixedHeader.down('#cb-type') &&
-            this.fixedHeader.down('#dt-start') && this.fixedHeader.down('#dt-end')){
+        if (this.fixedHeader && this.fixedHeader.down('#cb-type')){
+          //  this.fixedHeader.down('#dt-start') && this.fixedHeader.down('#dt-end')){
 
             var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
                 state_val = state ? state.value : null;
@@ -123,8 +121,8 @@ Ext.define('PortfolioItemCostTracking', {
             }
 
             this.fixedHeader.down('#cb-type').on('change', this._onTypeChange, this);
-                this.fixedHeader.down('#dt-start').on('change', this.updateStoreFilters, this);
-                this.fixedHeader.down('#dt-end').on('change', this.updateStoreFilters, this);
+                //this.fixedHeader.down('#dt-start').on('change', this.updateStoreFilters, this);
+                //this.fixedHeader.down('#dt-end').on('change', this.updateStoreFilters, this);
                 this._onTypeChange(this.fixedHeader.down('#cb-type'));
         }
     },
@@ -176,26 +174,26 @@ Ext.define('PortfolioItemCostTracking', {
 
         this._updateStore(modelNames);
     },
-    getStartDate: function(){
-        return this.getDate('dt-start',this.defaults.startDate);
-    },
-    getEndDate: function(){
-        return this.getDate('dt-end',this.defaults.endDate);
-    },
-    getDate: function(itemId, defaultDate){
-        var dt = defaultDate || null,
-            cmpId = '#' + itemId;
-
-        if (this.fixedHeader && this.fixedHeader.down(cmpId)){
-            dt = this.fixedHeader.down(cmpId).getValue();
-        } else {
-            var state = Ext.state.Manager.get(this.getContext().getScopedStateId(itemId));
-            if (state && state.value){
-                dt = new Date(state.value);
-            }
-        }
-        return dt;
-    },
+    //getStartDate: function(){
+    //    return this.getDate('dt-start',this.defaults.startDate);
+    //},
+    //getEndDate: function(){
+    //    return this.getDate('dt-end',this.defaults.endDate);
+    //},
+    //getDate: function(itemId, defaultDate){
+    //    var dt = defaultDate || null,
+    //        cmpId = '#' + itemId;
+    //
+    //    if (this.fixedHeader && this.fixedHeader.down(cmpId)){
+    //        dt = this.fixedHeader.down(cmpId).getValue();
+    //    } else {
+    //        var state = Ext.state.Manager.get(this.getContext().getScopedStateId(itemId));
+    //        if (state && state.value){
+    //            dt = new Date(state.value);
+    //        }
+    //    }
+    //    return dt;
+    //},
     addHeader: function (gb) {
         var header = gb.getHeader();
 
@@ -204,13 +202,14 @@ Ext.define('PortfolioItemCostTracking', {
         }
     },
     _getExportFilters: function(){
-        var filters = this._getDateFilters(),
-            custom_filters = [];
+        //var filters = this._getDateFilters(),
+        var    custom_filters = [];
 
         if (this.down('treegridcontainer') && this.down('treegridcontainer').currentCustomFilter){
             custom_filters = this.down('treegridcontainer').currentCustomFilter.filters || [];
         }
-        return Ext.Array.merge(filters, custom_filters);
+        return custom_filters;
+        //return Ext.Array.merge(filters, custom_filters);
 
     },
     _showExportMenu: function () {
@@ -234,59 +233,59 @@ Ext.define('PortfolioItemCostTracking', {
         });
     },
 
-    _getDateFilters: function(){
-
-        var start_date = this.getStartDate(),
-            end_date = this.getEndDate();
-
-        if(start_date === null && end_date === null){
-            return null;
-        }
-
-        var filter_actual = [],
-            filter_planned = [{
-                property: 'ActualEndDate',
-                value: null
-            }];
-
-        if (start_date){
-            filter_actual.push({
-                property: 'ActualEndDate',
-                operator: '>=',
-                value: Rally.util.DateTime.toIsoString(start_date)
-            });
-            filter_planned.push({
-                property: 'PlannedEndDate',
-                operator: '>=',
-                value: Rally.util.DateTime.toIsoString(start_date)
-            });
-        }
-
-        if (end_date){
-            filter_actual.push({
-                property: 'ActualEndDate',
-                operator: '<',
-                value: Rally.util.DateTime.toIsoString(end_date)
-            });
-            filter_planned.push({
-                property: 'PlannedEndDate',
-                operator: '<',
-                value: Rally.util.DateTime.toIsoString(end_date)
-            });
-        }
-
-        if (filter_actual.length > 1){
-            filter_actual = Rally.data.wsapi.Filter.and(filter_actual);
-        }
-        if (filter_planned.length > 1){
-            filter_planned = Rally.data.wsapi.Filter.and(filter_planned);
-        }
-        return filter_planned.or(filter_actual);
-    },
+    //_getDateFilters: function(){
+    //
+    //    var start_date = this.getStartDate(),
+    //        end_date = this.getEndDate();
+    //
+    //    if(start_date === null && end_date === null){
+    //        return null;
+    //    }
+    //
+    //    var filter_actual = [],
+    //        filter_planned = [{
+    //            property: 'ActualEndDate',
+    //            value: null
+    //        }];
+    //
+    //    if (start_date){
+    //        filter_actual.push({
+    //            property: 'ActualEndDate',
+    //            operator: '>=',
+    //            value: Rally.util.DateTime.toIsoString(start_date)
+    //        });
+    //        filter_planned.push({
+    //            property: 'PlannedEndDate',
+    //            operator: '>=',
+    //            value: Rally.util.DateTime.toIsoString(start_date)
+    //        });
+    //    }
+    //
+    //    if (end_date){
+    //        filter_actual.push({
+    //            property: 'ActualEndDate',
+    //            operator: '<',
+    //            value: Rally.util.DateTime.toIsoString(end_date)
+    //        });
+    //        filter_planned.push({
+    //            property: 'PlannedEndDate',
+    //            operator: '<',
+    //            value: Rally.util.DateTime.toIsoString(end_date)
+    //        });
+    //    }
+    //
+    //    if (filter_actual.length > 1){
+    //        filter_actual = Rally.data.wsapi.Filter.and(filter_actual);
+    //    }
+    //    if (filter_planned.length > 1){
+    //        filter_planned = Rally.data.wsapi.Filter.and(filter_planned);
+    //    }
+    //    return filter_planned.or(filter_actual);
+    //},
     updateStoreFilters: function(){
 
         if (this.down('treegridcontainer')){
-            this.down('treegridcontainer').storeConfig.filters = this._getDateFilters();
+          //  this.down('treegridcontainer').storeConfig.filters = this._getDateFilters();
             this.down('treegridcontainer').applyCustomFilter(this.down('treegridcontainer').currentCustomFilter);
         }
     },
@@ -303,13 +302,12 @@ Ext.define('PortfolioItemCostTracking', {
 
     },
     _updateStore: function(modelNames){
-        var filters = this._getDateFilters();
+      //  var filters = this._getDateFilters();
 
         var field_names = [];
-
-        if (filters === null){
-            return;
-        }
+        //if (filters === null){
+        //    return;
+        //}
         Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
             models: modelNames,
             //filters: filters,
@@ -345,9 +343,9 @@ Ext.define('PortfolioItemCostTracking', {
                 stateful: true,
                 stateId: this.getContext().getScopedStateId('cost-tree-grid')
             },
-            storeConfig: {
-                filters: this._getDateFilters()
-            },
+            //storeConfig: {
+            //    filters: this._getDateFilters()
+            //},
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
                 filterControlConfig: {
