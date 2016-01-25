@@ -44,8 +44,32 @@
             });
             return this.data[key];
         },
+        addRecords: function(records){
+            Ext.Array.each(records, function(r){
+                this.addRollupItem(r);
+            }, this);
+            this._processRollups(records);
+        },
+        _processRollups: function(records){
+            //First add the children
+            var rootParents = [];
+            Ext.Array.each(records, function(r){
+                var parentOid = (r.get('Parent') && r.get('Parent').ObjectID) || (r.get('PortfolioItem') && r.get('PortfolioItem').ObjectID) || null,
+                    parent = parentOid ? this.getRollupItem(parentOid) : null;
+
+                if (parent){
+                    parent.addChild(r);
+                    if (!parent.data.Parent){
+                        rootParents.push(parentOid);
+                    }
+                }
+            }, this);
+        },
         setRollupData: function (record) {
-            var rollup_data = this.getRollupItem(record.get('ObjectID'));
+            var oid = record.get('ObjectID'),
+                rollup_data = this.getRollupItem(record.get('ObjectID'));
+
+            this._calculatePortfolioItemRollupData(oid);
 
             if (rollup_data) {
                  //If we already loaded the data, then use that, we don't want to take the time to reload.
@@ -53,16 +77,24 @@
                 this.fireEvent('dataUpdated', rollup_data);
                 return;
             }
-            this._buildRollupData(record).then({
-                scope: this,
-                success: function (data) {
-                    this._setDataOnModel(record, data);
-                    this.fireEvent('dataUpdated', data);
-                },
-                failure: function (msg) {
-                    this.fireEvent('error', msg);
-                }
-            });
+
+
+            var key = record.get('ObjectID'),
+                item = this.addRollupItem(record);
+
+
+                //this._buildRollupData(record).then({
+                //    scope: this,
+                //    success: function (data) {
+                //        this._setDataOnModel(record, data);
+                //        this.fireEvent('dataUpdated', data);
+                //    },
+                //    failure: function (msg) {
+                //        this.fireEvent('error', msg);
+                //    }
+                //});
+
+
         },
 
         _buildRollupData: function (record) {
@@ -70,35 +102,37 @@
             var key = record.get('ObjectID');
             var item = this.addRollupItem(record);
             if (PortfolioItemCostTracking.Utilities.isPortfolioItem(record.get('_type'))) {
-                if (record.get('UserStories')) {  //If this is the lowest level PI, then get the first level User Stories
-                    this._fetchTopLevelUserStories([key]).then({
-                        scope: this,
-                        success: function () {
-                            //this._setDataOnModel(record, item);
-                            deferred.resolve(item);
-                        },
-                        failure: function (operation) {
-                            deferred.reject(operation);
-                        }
-                    });
-                } else { //else this does not have a UserStories field and is not the lowest level PI
-                    if (record.get('Children') && record.get('Children').Count > 0) {
-                        var child_model_type = this._getChildPortfolioModelType(record.get('_type'));
-                        //console.log('_fetchChildPortfolioItems');
-                        this._fetchChildPortfolioItems(child_model_type, [key]).then({
+
+                    if (record.get('UserStories')) {  //If this is the lowest level PI, then get the first level User Stories
+                        this._fetchTopLevelUserStories([key]).then({
                             scope: this,
                             success: function () {
-                                this._calculatePortfolioItemRollupData(key);
-                             //   this._setDataOnModel(record, item);
+                                //this._setDataOnModel(record, item);
                                 deferred.resolve(item);
                             },
                             failure: function (operation) {
-                                //console.log('_buildRollupData._fetchChildPortfolioItems failure', operation);
                                 deferred.reject(operation);
                             }
                         });
-                    }
-                } // end if is the lowest level PI
+                    } else { //else this does not have a UserStories field and is not the lowest level PI
+                        if (record.get('Children') && record.get('Children').Count > 0) {
+                            var child_model_type = this._getChildPortfolioModelType(record.get('_type'));
+                            //console.log('_fetchChildPortfolioItems');
+                            this._fetchChildPortfolioItems(child_model_type, [key]).then({
+                                scope: this,
+                                success: function () {
+                                    this._calculatePortfolioItemRollupData(key);
+                                    //   this._setDataOnModel(record, item);
+                                    deferred.resolve(item);
+                                },
+                                failure: function (operation) {
+                                    //console.log('_buildRollupData._fetchChildPortfolioItems failure', operation);
+                                    deferred.reject(operation);
+                                }
+                            });
+                        }
+                    } // end if is the lowest level PI
+
             } else { // else this is not a PI
                // this._setDataOnModel(record, item);
                 deferred.resolve(this.getRollupItem(key));
@@ -193,9 +227,13 @@
             });
             filters = Rally.data.wsapi.Filter.or(filters);
             var storyFetch = PortfolioItemCostTracking.Settings.getStoryFetch(this.additionalFetch);
+           var starttime = Date.now();
+
+            //PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecordsWithPaging('HierarchicalRequirement', filters, storyFetch, {project: null}).then({
             PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords('HierarchicalRequirement', filters, storyFetch, {project: null}).then({
                 scope: this,
                 success: function (records) {
+                    console.log('end time', Date.now()- starttime);
                     _.each(records, function (r) {
                         if (r.get('PortfolioItem') && r.get('PortfolioItem').ObjectID) {
                             var obj_id = r.get('PortfolioItem').ObjectID;

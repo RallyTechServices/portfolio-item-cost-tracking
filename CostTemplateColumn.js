@@ -10,7 +10,7 @@ Ext.define('Ext.CostTemplate', {
         Ext.QuickTips.init();
 
         me.tpl = new Ext.XTemplate('<tpl><div data-qtip="{[this.getTooltip(values)]}" style="cursor:pointer;text-align:right;">{[this.getCost(values)]}</div></tpl>',{
-            costField: me.dataIndex,
+            costField: me.costField,
             getCost: function(values){
                 if (values[this.costField] === null){
                     return PortfolioItemCostTracking.Settings.notAvailableText;
@@ -34,11 +34,10 @@ Ext.define('Ext.CostTemplate', {
         me.callParent(arguments);
     },
     getValue: function(){
-        return this.values[this.costField] || 0;
+        return values[this.costField] || 0;
     },
     defaultRenderer: function(value, meta, record) {
-
-        var data = Ext.apply({}, record.data, record.getAssociatedData());
+        var data = Ext.apply({}, record.data._rollupData); //, record.getAssociatedData());
         return this.tpl.apply(data);
     }
 });
