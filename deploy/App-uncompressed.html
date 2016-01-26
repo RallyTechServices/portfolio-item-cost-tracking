@@ -144,7 +144,6 @@
          }
          var me = this;
          this.rollupData = Ext.create('PortfolioItemCostTracking.RollupCalculator', {});
-       //  this.rollupData.on('statusupdate', me._showStatus);
 
          if (this.down('treegridcontainer')){
              if (this.fixedHeader && this.fixedHeader.rendered) {
@@ -221,7 +220,7 @@
         loader.load(records);
     },
     _handleLoadError: function(msg){
-        console.log('_handleLoadError', msg);
+        Rally.ui.notify.Notifier.showError({message: msg});
     },
     _processRollupData: function(portfolioHash, stories, records){
         var me = this;
@@ -1175,259 +1174,6 @@
     }
 });
 
-                (function() {
-    var Ext = window.Ext4 || window.Ext;
-
-    Ext.define('PortfolioItemCostTracking.RollupData', {
-        extend: 'Ext.Base',
-
-        mixins: {
-            observable: 'Ext.util.Observable'
-        },
-        data: undefined,
-
-        additionalFetch: undefined,
-
-        constructor: function (config) {
-           this.mixins.observable.constructor.call(this, config);
-           this.additionalFetch = (config && config.fetch) || [];
-        },
-        /**
-         * Clears out the data in the tree (called if settings are updated/changed, etc
-         */
-        clearRollupData: function (key) {
-            if (key && this.data) {
-                //Just clear this item
-                this.data[key] = null;
-            } else {
-                //Clear everything
-                this.data = {};
-            }
-        },
-        getRollupItem: function (key) {
-
-            if (!this.data) {
-                this.data = {};
-            }
-            return this.data[key] || null;
-        },
-        addRollupItem: function (record) {
-            if (!this.data) {
-                this.data = {};
-            }
-            var key = record.get('ObjectID');
-            this.data[key] = new PortfolioItemCostTracking.RollupDataItem({
-                record: record
-            });
-            return this.data[key];
-        },
-        addRecords: function(records){
-            Ext.Array.each(records, function(r){
-                this.addRollupItem(r);
-            }, this);
-            this._processRollups(records);
-        },
-        _processRollups: function(records){
-            //First add the children
-            var rootParents = [];
-            Ext.Array.each(records, function(r){
-                var parentOid = (r.get('Parent') && r.get('Parent').ObjectID) || (r.get('PortfolioItem') && r.get('PortfolioItem').ObjectID) || null,
-                    parent = parentOid ? this.getRollupItem(parentOid) : null;
-
-                if (parent){
-                    parent.addChild(r);
-                    if (!parent.data.Parent){
-                        rootParents.push(parentOid);
-                    }
-                }
-            }, this);
-        },
-        setRollupData: function (record) {
-            var oid = record.get('ObjectID'),
-                rollup_data = this.getRollupItem(record.get('ObjectID'));
-
-            this._calculatePortfolioItemRollupData(oid);
-
-            if (rollup_data) {
-                 //If we already loaded the data, then use that, we don't want to take the time to reload.
-                this._setDataOnModel(record, rollup_data);
-                this.fireEvent('dataUpdated', rollup_data);
-                return;
-            }
-
-
-            var key = record.get('ObjectID'),
-                item = this.addRollupItem(record);
-
-
-                //this._buildRollupData(record).then({
-                //    scope: this,
-                //    success: function (data) {
-                //        this._setDataOnModel(record, data);
-                //        this.fireEvent('dataUpdated', data);
-                //    },
-                //    failure: function (msg) {
-                //        this.fireEvent('error', msg);
-                //    }
-                //});
-
-
-        },
-
-        _buildRollupData: function (record) {
-            var deferred = Ext.create('Deft.Deferred');
-            var key = record.get('ObjectID');
-            var item = this.addRollupItem(record);
-            if (PortfolioItemCostTracking.Utilities.isPortfolioItem(record.get('_type'))) {
-
-                    if (record.get('UserStories')) {  //If this is the lowest level PI, then get the first level User Stories
-                        this._fetchTopLevelUserStories([key]).then({
-                            scope: this,
-                            success: function () {
-                                //this._setDataOnModel(record, item);
-                                deferred.resolve(item);
-                            },
-                            failure: function (operation) {
-                                deferred.reject(operation);
-                            }
-                        });
-                    } else { //else this does not have a UserStories field and is not the lowest level PI
-                        if (record.get('Children') && record.get('Children').Count > 0) {
-                            var child_model_type = this._getChildPortfolioModelType(record.get('_type'));
-                            //console.log('_fetchChildPortfolioItems');
-                            this._fetchChildPortfolioItems(child_model_type, [key]).then({
-                                scope: this,
-                                success: function () {
-                                    this._calculatePortfolioItemRollupData(key);
-                                    //   this._setDataOnModel(record, item);
-                                    deferred.resolve(item);
-                                },
-                                failure: function (operation) {
-                                    //console.log('_buildRollupData._fetchChildPortfolioItems failure', operation);
-                                    deferred.reject(operation);
-                                }
-                            });
-                        }
-                    } // end if is the lowest level PI
-
-            } else { // else this is not a PI
-               // this._setDataOnModel(record, item);
-                deferred.resolve(this.getRollupItem(key));
-            } //end if is a PI
-            return deferred;
-        },
-        _getDataObj: function (record) {
-            return new PortfolioItemCostTracking.RollupDataItem({
-                record: record
-            });
-        },
-        _calculatePortfolioItemRollupData: function (key) {
-            var data = this.getRollupItem(key);
-            if (data && PortfolioItemCostTracking.Utilities.isPortfolioItem(data.type) &&
-                (data.type.toLowerCase() !== PortfolioItemCostTracking.Settings.getPortfolioItemTypes()[0].toLowerCase())) {
-                _.each(data.children, function (childKey) {
-                    this._calculatePortfolioItemRollupData(childKey);
-                    data.addChildRollupData(this.getRollupItem(childKey));
-                }, this);
-            }
-        },
-
-        _setDataOnModel: function (record, data) {
-            record.set('_rollupDataPreliminaryBudget', data.getPreliminaryBudget());
-            record.set('_rollupDataTotalCost', data.getTotalCostRollup());
-            record.set('_rollupDataActualCost', data.getActualCostRollup());
-            record.set('_rollupDataRemainingCost', data.getRemainingCostRollup());
-            record.set('_notEstimated', data.usePreliminaryBudgetInCalcuation());
-            record.set('_rollupDataToolTip', data.getTooltip() || null);
-        },
-
-        _getChildPortfolioModelType: function (portfolioItemType) {
-            var found = Ext.Array.filter(PortfolioItemCostTracking.Settings.getPortfolioItemTypes(), function (item) {
-                return item.toLowerCase() === portfolioItemType.toLowerCase();
-            });
-
-            if (found && found.length > 0) {
-                var idx = _.indexOf(PortfolioItemCostTracking.Settings.getPortfolioItemTypes(), found[0]);
-                if (idx > 0) {
-                    return PortfolioItemCostTracking.Settings.getPortfolioItemTypes()[idx - 1].toLowerCase();
-                }
-            }
-            return null;
-        },
-        _fetchChildPortfolioItems: function (portfolioItemType, portfolioItemObjectIDs) {
-
-            var portfolioItemFetch = PortfolioItemCostTracking.Settings.getPortfolioItemFetch(this.additionalFetch);
-             var filters = _.map(portfolioItemObjectIDs, function (poid) {
-                return {
-                    property: 'Parent.ObjectID',
-                    value: poid
-                };
-            });
-            filters = Rally.data.wsapi.Filter.or(filters);
-
-            return PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords(portfolioItemType, filters, portfolioItemFetch, {project: null}).then({
-                scope: this,
-                success: function (records) {
-
-                    var child_model_type = this._getChildPortfolioModelType(portfolioItemType);
-                    _.each(records, function (r) {
-                        if (r.get('Parent') && r.get('Parent').ObjectID) {
-                            var parent = r.get('Parent').ObjectID;
-                            this.getRollupItem(parent).addChild(r);
-                        }
-                        this.addRollupItem(r);
-                    }, this);
-
-                    var obj_ids = _.map(records, function (r) {
-                        return r.get('ObjectID');
-                    });
-                    if (records.length > 0 && child_model_type) {
-                        return this._fetchChildPortfolioItems(child_model_type, obj_ids);
-                    } else {
-                        return this._fetchTopLevelUserStories(obj_ids);
-                    }
-                }
-            });
-        },
-        _fetchTopLevelUserStories: function (portfolioItemObjectIDs) {
-            var deferred = Ext.create('Deft.Deferred');
-
-            if (portfolioItemObjectIDs.length === 0) {
-                deferred.resolve();
-            }
-
-            var filters = _.map(portfolioItemObjectIDs, function (pi_oid) {
-                return {
-                    property: 'PortfolioItem.ObjectID',
-                    value: pi_oid
-                };
-            });
-            filters = Rally.data.wsapi.Filter.or(filters);
-            var storyFetch = PortfolioItemCostTracking.Settings.getStoryFetch(this.additionalFetch);
-           var starttime = Date.now();
-
-            //PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecordsWithPaging('HierarchicalRequirement', filters, storyFetch, {project: null}).then({
-            PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords('HierarchicalRequirement', filters, storyFetch, {project: null}).then({
-                scope: this,
-                success: function (records) {
-                    console.log('end time', Date.now()- starttime);
-                    _.each(records, function (r) {
-                        if (r.get('PortfolioItem') && r.get('PortfolioItem').ObjectID) {
-                            var obj_id = r.get('PortfolioItem').ObjectID;
-                            this.getRollupItem(obj_id).addChild(r);
-                            this.addRollupItem(r);
-                        }
-                    }, this);
-                    deferred.resolve();
-                },
-                failure: function (operation) {
-                    deferred.reject(operation);
-                }
-            });
-            return deferred;
-        }
-    });
-})();
                 Ext.define('PortfolioItemCostTracking.PortfolioRollupItem',{
 
     _rollupDataPreliminaryBudget: undefined,
@@ -1620,209 +1366,6 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
     }
 });
 
-//Ext.define('PortfolioItemCostTracking.RollupDataItem',{
-//
-//    children: undefined,
-//    type: undefined,
-//
-//    totalUnits: null,
-//    actualUnits: null,
-//    _rollupDataPreliminaryBudget: null,
-//    _rollupDataTotalCost: 0,
-//    _rollupDataActualCost: 0,
-//    _rollupDataRemainingCost: 0,
-//    tooltip: undefined,
-//    projectCosts: undefined,
-//    useTraditionalCalc: false,
-//    /**
-//     * data is from the record associated with the rollup data
-//     */
-//    data: undefined,
-//
-//    constructor: function(config){
-//        this.data = config.record.getData();
-//        this.type = config.record.get('_type');
-//        this.parent = config.record.get('Parent') && config.record.get('Parent').ObjectID ||
-//            (config.record.get('Parent') && config.record.get('Parent').ObjectID) ||null;
-//
-//        this._updateProjectNameAndCostHash(this.data.Project);
-//
-//        this._rollupDataPreliminaryBudget = this.calculatePreliminaryBudget(this.data);
-//
-//        if ((this.type.toLowerCase() === 'hierarchicalrequirement' )||(this.type.toLowerCase() === 'task')){
-//            this.actualUnits = this.getActualUnits(this.data,this.type.toLowerCase());
-//            this.totalUnits = this.getTotalUnits(this.data,this.type.toLowerCase());
-//            this._rollupDataActualCost = this.calculateCost(this.data, this.actualUnits);
-//            this._rollupDataTotalCost = this.calculateCost(this.data, this.totalUnits);
-//            if (this._rollupDataActualCost === null || this._rollupDataTotalCost === null) {
-//                this._rollupDataRemainingCost = null;
-//            } else {
-//                this._rollupDataRemainingCost = this._rollupDataTotalCost - this._rollupDataActualCost ;
-//            }
-//        }
-//
-//        //Init the rollup data
-//        if (PortfolioItemCostTracking.Utilities.isPortfolioItem(this.type)){
-//            this.totalUnits = 0;
-//            this._rollupDataTotalCost = 0;
-//            this.actualUnits = 0;
-//            this._rollupDataActualCost = 0;
-//            this._rollupDataRemainingCost = 0;
-//        }
-//    },
-//    getData: function(field){
-//         if (this[field] || this[field] === 0 ) {
-//            return this[field];
-//        }
-//        if (this.data[field] || this.data[field] === 0){
-//            return this.data[field];
-//        }
-//        return null;
-//    },
-//    addChild: function(record){
-//        var childType = record.get('_type'),
-//            childData = record.getData();
-//
-//        if (!this.children){
-//            this.children = [];
-//        }
-//        if (Ext.Array.contains(this.children, childData.ObjectID)){
-//            //We've already processed this, so don't do it again.
-//            return;
-//        }
-//
-//        this.children.push(childData.ObjectID);
-//
-//        if (record.get('_type').toLowerCase() === 'hierarchicalrequirement'){
-//            this._updateProjectNameAndCostHash(childData.Project);
-//
-//            var total_units = this.getTotalUnits(childData, childType) || 0,
-//                actual_units = this.getActualUnits(childData, childType) || 0;
-//
-//            this.totalUnits = (this.totalUnits || 0) + total_units;
-//            this.actualUnits = (this.actualUnits || 0) + actual_units;
-//
-//            this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + (this.calculateCost(childData, total_units) || 0);
-//            this._rollupDataActualCost = (this._rollupDataActualCost || 0) + (this.calculateCost(childData, actual_units) || 0);
-//            this._rollupDataRemainingCost = this._rollupDataTotalCost  - this._rollupDataActualCost;
-//        }
-//    },
-//    getTotalCostRollup: function(useBudgetCalc){
-//        if (this.usePreliminaryBudgetInCalcuation(useBudgetCalc)){
-//            return this.getActualCostRollup() + this.getRemainingCostRollup();
-//        }
-//        return this._rollupDataTotalCost;
-//    },
-//    getActualCostRollup: function(){
-//        return this._rollupDataActualCost;
-//    },
-//    getRemainingCostRollup: function(useBudgetCalc){
-//        if (this.usePreliminaryBudgetInCalcuation(useBudgetCalc)){
-//            return this.getPreliminaryBudget() - this.getActualCostRollup();
-//        }
-//        return this._rollupDataRemainingCost;
-//    },
-//    getPreliminaryBudget: function(){
-//        return this._rollupDataPreliminaryBudget;
-//    },
-//    /**
-//     * addChildRollupData
-//     * @param childData
-//     */
-//    addChildRollupData: function(childData){
-//        console.log('addChildRollupData',childData._type);
-//        this.totalUnits = (this.totalUnits || 0) + childData.totalUnits;
-//        this._rollupDataTotalCost = (this._rollupDataTotalCost || 0) + childData.getTotalCostRollup() ;
-//
-//        this.actualUnits = (this.actualUnits || 0) + childData.actualUnits;
-//        this._rollupDataActualCost = (this._rollupDataActualCost || 0) + childData.getActualCostRollup();
-//
-//        this._rollupDataRemainingCost = (this._rollupDataRemainingCost || 0) + childData.getRemainingCostRollup();
-//
-//        this.projectCosts = Ext.merge(this.projectCosts || {}, childData.projectCosts || {});
-//    },
-//    usePreliminaryBudgetInCalcuation: function(useBudgetCalc){
-//        if (useBudgetCalc || (this._rollupDataTotalCost <= 0  && this.getPreliminaryBudget() > this.getActualCostRollup())){
-//            return true;
-//        }
-//        return false;
-//    },
-//    getTooltip: function(){
-//        var completed  = PortfolioItemCostTracking.Settings.notAvailableText;
-//        if ((this.actualUnits !== null) && (this.totalUnits !== null)){
-//            completed = Ext.String.format("{0}/{1}", this.actualUnits, this.totalUnits);
-//        }
-//
-//        var calc_type_name = PortfolioItemCostTracking.Settings.getCalculationTypeDisplayName();
-//
-//        var html = Ext.String.format('{0} completed {1}<br/><br/>Cost per unit:<br/>', calc_type_name, completed);
-//        _.each(this.projectCosts, function(project_cost, project_name){
-//            html += Ext.String.format('{0} {1}<br/>', PortfolioItemCostTracking.Settings.formatCost(project_cost), project_name);
-//        });
-//
-//        if (this.usePreliminaryBudgetInCalcuation()){
-//             html += '<br/><p>Portfolio Item has missing ' + calc_type_name + '.  Preliminary Budget is being used to calculate Projected and Remaining costs.</p>';
-//        }
-//        return html;
-//
-//    },
-//    _updateProjectNameAndCostHash: function(project){
-//
-//        this.projectCosts = this.projectCosts || {};
-//
-//        var name = project._refObjectName,
-//            cost = PortfolioItemCostTracking.Settings.getCostPerUnit(project._ref);
-//
-//        if (PortfolioItemCostTracking.Settings.isProjectUsingNormalizedCost(project._ref)){
-//            name =  "normalized (default)";
-//        }
-//        this.projectCosts[name] = cost;
-//    },
-//    calculateCost: function(data, units){
-//        if (units === null){
-//            return null;
-//        }
-//        return units * PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
-//    },
-//    getActualUnits: function(data, modelType){
-//         var calcType = PortfolioItemCostTracking.Settings.getCalculationTypeSettings(),
-//            fn = 'actualUnitsForStoryFn';
-//
-//        if (modelType.toLowerCase() === 'task'){
-//            fn = 'actualUnitsForTaskFn';
-//        }
-//
-//        if (calcType[fn]) {
-//            return calcType[fn](data);
-//        }
-//        return null;
-//    },
-//    getTotalUnits: function(data, modelType){
-//        var calcType = PortfolioItemCostTracking.Settings.getCalculationTypeSettings(),
-//            fn = 'totalUnitsForStoryFn';
-//
-//        if (modelType.toLowerCase() === 'task'){
-//            fn = 'totalUnitsForTaskFn';
-//        }
-//        if (calcType[fn]) {
-//            return calcType[fn](data);
-//        }
-//        return null;
-//    },
-//
-//    calculatePreliminaryBudget: function(data){
-//        var preliminaryBudgetField = PortfolioItemCostTracking.Settings.preliminaryBudgetField;
-//
-//        if (data && data[preliminaryBudgetField]){
-//            //We need to do this in case we are using hte PreliminaryEstimate field, which is an object
-//            var val = data[preliminaryBudgetField].Value || data[preliminaryBudgetField];
-//            var cpu = PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
-//            return cpu * val;
-//        }
-//        return null;
-//    }
-//});
-
                 (function() {
     var Ext = window.Ext4 || window.Ext;
 
@@ -1852,13 +1395,11 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
             console.log('addRollupRecords. DONE', new Date());
         },
         getRollupData: function(record){
-            if (record && record.get('ObjectID')){
-                return this.rollupItems[record.get('ObjectID')] || null;
+            if (!record){
+                return null;
             }
-
-            //Todo if record == story or task, get the data
-            return null;
-
+            var objectID = record.get('ObjectID');
+            return this.rollupItems[objectID] || null;
         },
         /**
          * Adds records needed to calculate the rollup data
@@ -1915,8 +1456,7 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
 
         },
         _calculatePortfolioItemRollups: function(){
-
-            _.each(this.rollupItems, function(item){
+           _.each(this.rollupItems, function(item){
                 if (item && !item.parent){
                     item.processChildren();
                 }
@@ -1926,7 +1466,6 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
             if (!records || records.length === 0){
                 return [];
             }
-            console.log('updateModels', new Date());
             var totalFn = null,
                 actualFn = null,
                 type = records[0].get('_type').toLowerCase(),
@@ -1942,7 +1481,6 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
                 totalFn = PortfolioItemCostTracking.Settings.getCalculationTypeSettings().totalUnitsForStoryFn;
                 actualFn = PortfolioItemCostTracking.Settings.getCalculationTypeSettings().actualUnitsForStoryFn;
             }
-            console.log('start each');
             _.each(records, function(r){
                 if (isPortfolioItem){
                     if (!this._updatePortfolioModel(r, type)){
@@ -1952,22 +1490,12 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
                     this._updateModel(r, calcSettings, totalFn, actualFn);
                 }
             }, this);
-            console.log('updateModels DONE', new Date());
             return unloadedModels;
         },
         _updatePortfolioModel: function(record){
-            console.log('_updatePortfolioModel get item');
             var rollupItem = this.rollupItems[record.get('ObjectID')] || null;
-            console.log('_updatePortfolioModel begine set', new Date());
-            //onsole.log('_updatePortfolioModel', rollupItem);
             if (rollupItem){
-                record.set('_rollupData', rollupItem); //rollupItem.getPreliminaryBudget());
-                //record.set('_rollupDataTotalCost', 1); // rollupItem.getTotalCostRollup());
-                //record.set('_rollupDataActualCost', 1); // rollupItem.getActualCostRollup());
-                //record.set('_rollupDataRemainingCost', 1); // rollupItem.getRemainingCostRollup());
-                //record.set('_notEstimated', 1); // rollupItem.usePreliminaryBudgetInCalcuation());
-                //record.set('_rollupDataToolTip', 1); // rollupItem.getTooltip() || null);
-                //console.log('_updatePortfolioModel set done', new Date())
+                record.set('_rollupData', rollupItem);
                 return record;
             }
             return null;
@@ -1979,7 +1507,6 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
                 actual = actualFn(data),
                 totalCost = this._calculateCost(data, total),
                 actualCost = this._calculateCost(data, actual),
-                remainingCost = null,
                 rollupData = {
                     _rollupDataPreliminaryBudget: null,
                     _rollupDataTotalCost: totalCost,
@@ -1991,16 +1518,7 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
             if (totalCost !== null && actualCost !== null) {
                 rollupData._rollupDataRemainingCost = totalCost - actualCost;
             }
-
-
-
             record.set('_rollupData', rollupData);
-            //record.set('_rollupDataPreliminaryBudget', null);
-            //record.set('_rollupDataTotalCost', totalCost);
-            //record.set('_rollupDataActualCost', actualCost);
-            //record.set('_rollupDataRemainingCost', remainingCost);
-            //record.set('_notEstimated', null);
-            //record.set('_rollupDataToolTip', "tooltip" || null);
             return record;
         },
         _calculateCost: function(data, units){
@@ -2065,15 +1583,12 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
 
         context: undefined,
         promise: undefined,
-        useLookback: false,
-
 
         constructor: function (config) {
             this.mixins.observable.constructor.call(this, config);
 
             this.context = config && config.context || null;
         },
-
         load: function(rootRecords){
 
             if (!rootRecords || rootRecords.length === 0){
@@ -2085,7 +1600,6 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
 
                 this._fetchPortfolioItems();
             } else {
-
                 this._fetchStories();
             }
         },
@@ -2134,16 +1648,6 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
                 scope: this
             });
 
-        },
-        _getStoryFetchPromise: function(config){
-            //if (this.useLookback) {
-            //    var rootObjectIDs = _.map(this.rootRecords, function (r) {
-            //        return r.get('ObjectID');
-            //    });
-            //    return this.fetchlookback(rootObjectIDs, config.fetch);
-            //} else {
-            return this.fetchWsapiRecordsWithPaging(config);
-            //}
         },
         _getPortfolioItemLevelsToFetch: function(){
             var type = this.rootRecords[0].get('_type'),
@@ -2214,35 +1718,11 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
 
             return deferred;
         },
-
-
         cancel: function(){
             if ((this.promise && this.promise.getState() === 'pending')){
                 this.promise.cancel();
                 this.fireEvent('loadcancelled');
             }
-        },
-
-        fetchWsapiRecords: function(config){
-            var deferred = Ext.create('Deft.Deferred');
-
-            Ext.create('Rally.data.wsapi.Store',{
-                model: config.model,
-                fetch: config.fetch,
-                filters: config.filters,
-                limit: Infinity
-            }).load({
-                callback: function(records, operation, success){
-                    if (success){
-                       // this.fireEvent('statusupdate',"Loading artifacts");
-                        deferred.resolve(records);
-                    } else {
-                        deferred.reject(Ext.String.format("Error getting {0} for {1}: {2}", model, query_filters.toString(), operation.error.errors.join(',')));
-                    }
-                },
-                scope: this
-            });
-            return deferred;
         },
         fetchWsapiCount: function(model, query_filters){
             var deferred = Ext.create('Deft.Deferred');
@@ -2306,13 +1786,11 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
         },
         loadStorePage: function(pageNum, store){
             var deferred = Ext.create('Deft.Deferred');
-            //var previouslyLoaded = (pageNum - 1) * store.pageSize;
 
             store.loadPage(pageNum, {
                 callback: function(records, operation){
                     if (operation.wasSuccessful()){
-                        //this.fireEvent('statusupdate',Ext.String.format("{0}/{1} artifacts loaded", previouslyLoaded, operation.resultSet.totalRecords));
-                        deferred.resolve(records);
+                         deferred.resolve(records);
                     } else {
                         deferred.reject('loadStorePage error: ' + operation.error.errors.join(','));
                     }
@@ -2322,8 +1800,6 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
 
             return deferred;
         }
-
-
     });
 })();
                 
@@ -3483,30 +2959,46 @@ Ext.define('TreeGridContainerCustomFilterControl', {
 
                 var oids = _.map(records, function(r){ return r.get('ObjectID'); });
 
-                var rollupData = Ext.create('PortfolioItemCostTracking.RollupData',{
+                var loader = Ext.create('PortfolioItemCostTracking.RollupDataLoader',{
+                    context: this.getContext(),
+                    rootRecords: records,
                     fetch: fetch,
                     listeners: {
-                        scope: this,
-                        dataUpdated: function(data){
-                            //console.log('dataUpdated', data, recordCounter, recordTotal);
-                            recordCounter++;
-                            if (recordCounter == recordTotal){
-                                var exportData = this._getExportableRollupData(oids,columns, rollupData);
-
-                                columns = this._getAncestorTypeColumns(rootModel).concat(columns);
-                                var csv = this._transformExportableRollupDataToDelimitedString(exportData, columns);
-                                deferred.resolve(csv);
-                            }
+                        rollupdataloaded: function(portfolioHash, stories){
+                            this._processRollupData(portfolioHash,stories,records);
                         },
-                        error: function(msg){
-                            deferred.reject(msg);
-                        }
+                        loaderror: this._handleLoadError,
+                        statusupdate: this._showStatus,
+                        scope: this
                     }
                 });
+                loader.load(records);
 
-                _.each(records, function(r) {
-                    rollupData.setRollupData(r);
-                }, this);
+
+                //var rollupData = Ext.create('PortfolioItemCostTracking.RollupCalculator',{
+                //    fetch: fetch,
+                //    listeners: {
+                //        scope: this,
+                //        dataUpdated: function(data){
+                //            //console.log('dataUpdated', data, recordCounter, recordTotal);
+                //            recordCounter++;
+                //            if (recordCounter == recordTotal){
+                //                var exportData = this._getExportableRollupData(oids,columns, rollupData);
+                //
+                //                columns = this._getAncestorTypeColumns(rootModel).concat(columns);
+                //                var csv = this._transformExportableRollupDataToDelimitedString(exportData, columns);
+                //                deferred.resolve(csv);
+                //            }
+                //        },
+                //        error: function(msg){
+                //            deferred.reject(msg);
+                //        }
+                //    }
+                //});
+                //
+                //_.each(records, function(r) {
+                //    rollupData.setRollupData(r);
+                //}, this);
             },
             failure: function(msg){
                 deferred.reject(msg);
@@ -3598,7 +3090,6 @@ Ext.define('TreeGridContainerCustomFilterControl', {
                 } else {
                     rec[field] = data;
                 }
-
             }
         });
         return rec;

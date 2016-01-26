@@ -93,30 +93,46 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
 
                 var oids = _.map(records, function(r){ return r.get('ObjectID'); });
 
-                var rollupData = Ext.create('PortfolioItemCostTracking.RollupData',{
+                var loader = Ext.create('PortfolioItemCostTracking.RollupDataLoader',{
+                    context: this.getContext(),
+                    rootRecords: records,
                     fetch: fetch,
                     listeners: {
-                        scope: this,
-                        dataUpdated: function(data){
-                            //console.log('dataUpdated', data, recordCounter, recordTotal);
-                            recordCounter++;
-                            if (recordCounter == recordTotal){
-                                var exportData = this._getExportableRollupData(oids,columns, rollupData);
-
-                                columns = this._getAncestorTypeColumns(rootModel).concat(columns);
-                                var csv = this._transformExportableRollupDataToDelimitedString(exportData, columns);
-                                deferred.resolve(csv);
-                            }
+                        rollupdataloaded: function(portfolioHash, stories){
+                            this._processRollupData(portfolioHash,stories,records);
                         },
-                        error: function(msg){
-                            deferred.reject(msg);
-                        }
+                        loaderror: this._handleLoadError,
+                        statusupdate: this._showStatus,
+                        scope: this
                     }
                 });
+                loader.load(records);
 
-                _.each(records, function(r) {
-                    rollupData.setRollupData(r);
-                }, this);
+
+                //var rollupData = Ext.create('PortfolioItemCostTracking.RollupCalculator',{
+                //    fetch: fetch,
+                //    listeners: {
+                //        scope: this,
+                //        dataUpdated: function(data){
+                //            //console.log('dataUpdated', data, recordCounter, recordTotal);
+                //            recordCounter++;
+                //            if (recordCounter == recordTotal){
+                //                var exportData = this._getExportableRollupData(oids,columns, rollupData);
+                //
+                //                columns = this._getAncestorTypeColumns(rootModel).concat(columns);
+                //                var csv = this._transformExportableRollupDataToDelimitedString(exportData, columns);
+                //                deferred.resolve(csv);
+                //            }
+                //        },
+                //        error: function(msg){
+                //            deferred.reject(msg);
+                //        }
+                //    }
+                //});
+                //
+                //_.each(records, function(r) {
+                //    rollupData.setRollupData(r);
+                //}, this);
             },
             failure: function(msg){
                 deferred.reject(msg);
@@ -208,7 +224,6 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
                 } else {
                     rec[field] = data;
                 }
-
             }
         });
         return rec;

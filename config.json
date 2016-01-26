@@ -8,7 +8,6 @@
       "Settings.js",
       "WsapiToolbox.js",
       "CostPerProjectSettings.js",
-      "RollupData.js",
       "RollupDataItem.js",
       "RollupCalculator.js",
       "ParallelThrottle.js",

@@ -135,7 +135,6 @@ Ext.define('PortfolioItemCostTracking', {
          }
          var me = this;
          this.rollupData = Ext.create('PortfolioItemCostTracking.RollupCalculator', {});
-       //  this.rollupData.on('statusupdate', me._showStatus);
 
          if (this.down('treegridcontainer')){
              if (this.fixedHeader && this.fixedHeader.rendered) {
@@ -212,7 +211,7 @@ Ext.define('PortfolioItemCostTracking', {
         loader.load(records);
     },
     _handleLoadError: function(msg){
-        console.log('_handleLoadError', msg);
+        Rally.ui.notify.Notifier.showError({message: msg});
     },
     _processRollupData: function(portfolioHash, stories, records){
         var me = this;
