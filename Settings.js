@@ -20,14 +20,25 @@ Ext.define('PortfolioItemCostTracking.Settings', {
      * App configurations
      */
 
+    tooltipActualCost: 'actualcost ',
+    tooltipTotalCost: 'totalcost',
+    tooltipRemainingCost: 'remaining cost',
+    tooltipPreliminaryBudget: 'preliminary budget',
+
     calculationTypes: {
         points: {
             key: 'points',
             label: 'Based on Story Points',
             displayName: 'Story Points',
-            defaultColumns: ['Name', 'Project', 'PlanEstimate', 'LeafStoryPlanEstimateTotal'],
+            defaultColumns: ['Name', 'Project', 'PlanEstimate', 'LeafStoryPlanEstimateTotal','AcceptedLeafStoryPlanEstimateTotal'],
             requiredStoryFetch: ['ScheduleState','PortfolioItem','PlanEstimate'],
             requiredTaskFetch: [],
+            tooltips: {
+                _rollupDataActualCost: 'Actual Cost is the sum of the Accepted Story Plan Estimates <i>for all stories in scope</i> * Cost Per Unit for the project that the top level story resides in.',
+                _rollupDataRemainingCost: 'Remaining Cost is the Total Projected Cost - Actual Cost',
+                _rollupDataTotalCost: 'Total Projected Cost is the sum of the Plan Estimate <i>for each story in scope</i>* Cost Per Unit for the project that the top level story resides in.  <br/><br/> If a Portfolio Item does not have any estimated stories and the Preliminary Budget is greater than the Portfolio Item\'s Actual Cost, then the Preliminary Budget will be used for the Total Projected Cost.',
+                _rollupDataPreliminaryBudget: 'The prelimary budget will be calculated by multiplying the value of the selected field by the Cost per Unit for the project of the portfolio item. <br/><br/> Note that for portfolio item types beyond the lowest level, this is calculated from the preliminary estimate of the portfolio item, not from the sum of the portfolio item children.  If the selected field value is null, then -- will be displayed.'
+            },
             actualUnitsForStoryFn: function(data){
                 if (data.PlanEstimate && Ext.Array.contains(PortfolioItemCostTracking.Settings.completedScheduleStates, data.ScheduleState)) {
                     return data.PlanEstimate || 0;
@@ -45,6 +56,12 @@ Ext.define('PortfolioItemCostTracking.Settings', {
             defaultColumns: ['Name','Project'],
             requiredStoryFetch: ['ScheduleState','PortfolioItem','TaskEstimateTotal','TaskActualTotal','TaskRemainingTotal'],
             requiredTaskFetch: ['ToDo','Actuals'],
+            tooltips: {
+                _rollupDataActualCost: 'Actual Cost is the sum of the Task Actuals <i>for all stories in scope</i> * Cost Per Unit for the project that the top level story resides in.',
+                _rollupDataRemainingCost: 'Remaining Cost is the sum of the ToDo <i>for all stories in scope</i> * Cost Per Unit for the project that the top level story resides in.',
+                _rollupDataTotalCost: 'Total Projected Cost is the sum of the Task Estimate Total <i>for each story in scope</i> * Cost Per Unit for the project that the top level story resides in.  <br/><br/> If a Portfolio Item does not have any estimated stories and the Preliminary Budget is greater than the Portfolio Item\'s Actual Cost, then the Preliminary Budget will be used for the Total Projected Cost.',
+                _rollupDataPreliminaryBudget: 'The prelimary budget will be calculated by multiplying the value of the selected field by the Cost per Unit for the project of the portfolio item. <br/><br/> Note that for portfolio item types beyond the lowest level, this is calculated from the preliminary estimate of the portfolio item, not from the sum of the portfolio item children.  If the selected field value is null, then -- will be displayed.'
+            },
             actualUnitsForStoryFn: function(data){ return data.TaskActualTotal || 0; },
             totalUnitsForStoryFn: function(data){
                 return (data.TaskActualTotal || 0) + (data.TaskRemainingTotal || 0);
@@ -89,6 +106,11 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         {name: "Japanese Yen", value: "&#165;"},
         {name: "Brazilian Real", value: "R$"}
     ],
+    getHeaderTooltip: function(field){
+        var settings = PortfolioItemCostTracking.Settings.getCalculationTypeSettings();
+        return settings.tooltips[field] || null;
+
+    },
     setCalculationType: function(type){
          //Check that actuals is on, and warn user if it is not.
         if (type === 'taskHours'){
@@ -109,6 +131,29 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         } else {
             PortfolioItemCostTracking.Settings.selectedCalculationType = 'points';
         }
+    },
+    /**
+     * getPortfolioItemTypeLevel
+     * @param modelName
+     * Given a model name, this function returns the level of portfolio item the model name is:
+     *  0 = Lowest Level (Feature)
+     *  1 = Second Level (e.g. Initiative)
+     *  ...
+     *  return -1 if the modelName is not a portfolio item type
+     */
+    getPortfolioItemTypeLevel: function(modelName){
+        var idx = _.indexOf(PortfolioItemCostTracking.Settings.getPortfolioItemTypes(), modelName.toLowerCase());
+        return idx;
+    },
+    getRollupItemType: function(type){
+        var idx = _.indexOf(PortfolioItemCostTracking.Settings.getPortfolioItemTypes(), type.toLowerCase());
+        if (idx > 0){
+            return 'PortfolioItemCostTracking.UpperLevelPortfolioRollupItem';
+        }
+        if (idx === 0){
+            return 'PortfolioItemCostTracking.LowestLevelPortfolioRollupItem';
+        }
+        return null;
     },
     getPortfolioItemTypes: function(){
         return _.map( this.portfolioItemTypes, function(p){ return p.typePath.toLowerCase(); });
@@ -165,7 +210,7 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         }
 
 
-       return Ext.Array.merge(PortfolioItemCostTracking.Settings.getStoryFetch(),
+       return Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getStoryFetch(),
                                 PortfolioItemCostTracking.Settings.getPortfolioItemFetch(),
                                 (PortfolioItemCostTracking.Settings.getCalculationTypeSettings().requiredTaskFetch || []));
 

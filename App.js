@@ -26,70 +26,31 @@ Ext.define('PortfolioItemCostTracking', {
 
         //ToDO: check for RPM?
 
-        //Initialize the filter values...
-        //var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
-        //    state_val = state ? state.value : null;
+        this._createPickers();
 
-
-       Deft.Promise.all([
-            PortfolioItemCostTracking.WsapiToolbox.fetchPortfolioItemTypes(),
-            PortfolioItemCostTracking.WsapiToolbox.fetchDoneStates()
-         //   PortfolioItemCostTracking.WsapiToolbox.fetchModelTypePathByTypeDefinition(state_val)
-        ]).then({
-            scope: this,
-            success: function(results){
-                this._initializeSettings(this.getSettings(), results[1], results[0]);
-               // state_val = state_val || results[0][0]; // set the state for the pi type to the lowest level PI if its not been set yet
-                this._createPickers();
+        PortfolioItemCostTracking.WsapiToolbox.fetchDoneStates().then({
+            success: function(doneScheduleStates){
+                PortfolioItemCostTracking.Settings.completedScheduleStates = doneScheduleStates;
             },
             failure: function(msg){
                 Rally.ui.notify.Notifier.showError({message: msg});
-            }
+            },
+            scope: this
         });
     },
     _createPickers: function(piType){
 
         //var startDate = this.getStartDate(),
         //    endDate = this.getEndDate();
-        this.fixedHeader = Ext.create('Ext.container.Container',{
+        this.fixedHeader = this.add({ //Ext.create('Ext.container.Container',{
+            xtype: 'container',
             itemId: 'header-controls',
-            width: 460,
+            width: 600,
             height: 50,
-            layout: 'hbox',
+            layout: {type:  'hbox'},
             padding: '0 0 20 20',
             margin: 10,
             items: [{
-            //    xtype: 'rallydatefield',
-            //    itemId: 'dt-start',
-            //    stateful: true,
-            //    stateId: this.getContext().getScopedStateId('dt-start'),
-            //    stateEvents: ['change'],
-            //    margin: '0 10 0 0',
-            //    padding: 5,
-            //    fieldLabel: 'Start Date',
-            //    labelSeparator: '',
-            //    labelCls: 'lbl',
-            //    labelAlign: 'top',
-            //    listeners: {
-            //        scope: this,
-            //        ready: this._attachListeners
-            //    }
-            //},{
-            //    xtype: 'rallydatefield',
-            //    itemId: 'dt-end',
-            //    stateful: true,
-            //    stateId: this.getContext().getScopedStateId('dt-end'),
-            //    stateEvents: ['change'],
-            //    margin: '0 10 0 0',
-            //    labelSeparator: '',
-            //    labelCls: 'lbl',
-            //    fieldLabel: 'End Date',
-            //    labelAlign: 'top',
-            //    listeners: {
-            //        scope: this,
-            //        ready: this._attachListeners
-            //    }
-            //},{
                 xtype: 'rallyportfolioitemtypecombobox',
                 itemId: 'cb-type',
                 stateful: true,
@@ -101,18 +62,18 @@ Ext.define('PortfolioItemCostTracking', {
                 labelCls: 'lbl',
                 listeners: {
                     scope: this,
-                    ready: this._attachListeners
+                    ready: this._initialize
                 }
             }]
         });
-
-        //this.fixedHeader.down('#dt-start').setValue(startDate);
-        //this.fixedHeader.down('#dt-end').setValue(endDate);
-
     },
-    _attachListeners: function(){
+    _initialize: function(){
         if (this.fixedHeader && this.fixedHeader.down('#cb-type')){
           //  this.fixedHeader.down('#dt-start') && this.fixedHeader.down('#dt-end')){
+
+            //Get the portfolio item types from the combobox since we have just loaded that.
+            var portfolioItemTypes = this._initializePortfolioItemTypes(this.fixedHeader.down('#cb-type'));
+            this._initializeSettings(this.getSettings(),null, portfolioItemTypes);
 
             var state = Ext.state.Manager.get(this.getContext().getScopedStateId('cb-type')),
                 state_val = state ? state.value : null;
@@ -125,6 +86,17 @@ Ext.define('PortfolioItemCostTracking', {
                 //this.fixedHeader.down('#dt-end').on('change', this.updateStoreFilters, this);
                 this._onTypeChange(this.fixedHeader.down('#cb-type'));
         }
+    },
+    _initializePortfolioItemTypes: function(cb){
+
+        var items = cb.getStore().data.items,
+            portfolioItemTypes = new Array(items.length);
+
+        Ext.Array.each(items, function(item){
+                var idx = Number(item.get('Ordinal'));
+                portfolioItemTypes[idx] = { typePath: item.get('TypePath'), name: item.get('Name'), ordinal: idx };
+        });
+        return  portfolioItemTypes;
     },
     _onTypeChange: function(piPicker){
         var piType = piPicker.getRecord().get('TypePath');
@@ -159,8 +131,10 @@ Ext.define('PortfolioItemCostTracking', {
      _initializeGrid: function(modelNames){
 
          if (this.rollupData){
-             this.rollupData.clearRollupData();
+             this.rollupData = null;
          }
+         var me = this;
+         this.rollupData = Ext.create('PortfolioItemCostTracking.RollupCalculator', {});
 
          if (this.down('treegridcontainer')){
              if (this.fixedHeader && this.fixedHeader.rendered) {
@@ -174,26 +148,7 @@ Ext.define('PortfolioItemCostTracking', {
 
         this._updateStore(modelNames);
     },
-    //getStartDate: function(){
-    //    return this.getDate('dt-start',this.defaults.startDate);
-    //},
-    //getEndDate: function(){
-    //    return this.getDate('dt-end',this.defaults.endDate);
-    //},
-    //getDate: function(itemId, defaultDate){
-    //    var dt = defaultDate || null,
-    //        cmpId = '#' + itemId;
-    //
-    //    if (this.fixedHeader && this.fixedHeader.down(cmpId)){
-    //        dt = this.fixedHeader.down(cmpId).getValue();
-    //    } else {
-    //        var state = Ext.state.Manager.get(this.getContext().getScopedStateId(itemId));
-    //        if (state && state.value){
-    //            dt = new Date(state.value);
-    //        }
-    //    }
-    //    return dt;
-    //},
+
     addHeader: function (gb) {
         var header = gb.getHeader();
 
@@ -201,7 +156,7 @@ Ext.define('PortfolioItemCostTracking', {
             header.getLeft().add(this.fixedHeader);
         }
     },
-    _getExportFilters: function(){
+    _getFilters: function(){
         //var filters = this._getDateFilters(),
         var    custom_filters = [];
 
@@ -216,10 +171,10 @@ Ext.define('PortfolioItemCostTracking', {
         var columnCfgs = this.down('treegridcontainer').getGrid().columnCfgs,
             additionalFields = _.pluck(columnCfgs, 'dataIndex');
 
-        var filters = this._getExportFilters(),
+        var filters = this._getFilters(),
             fetch = PortfolioItemCostTracking.Settings.getTreeFetch(additionalFields),
             root_model = this.modelNames[0];
-
+        console.log('_showExportMenu', fetch,additionalFields);
          var exporter = new PortfolioItemCostTracking.Exporter();
         exporter.fetchExportData(root_model,filters,fetch,columnCfgs).then({
             scope: this,
@@ -232,82 +187,71 @@ Ext.define('PortfolioItemCostTracking', {
             }
         });
     },
-
-    //_getDateFilters: function(){
-    //
-    //    var start_date = this.getStartDate(),
-    //        end_date = this.getEndDate();
-    //
-    //    if(start_date === null && end_date === null){
-    //        return null;
-    //    }
-    //
-    //    var filter_actual = [],
-    //        filter_planned = [{
-    //            property: 'ActualEndDate',
-    //            value: null
-    //        }];
-    //
-    //    if (start_date){
-    //        filter_actual.push({
-    //            property: 'ActualEndDate',
-    //            operator: '>=',
-    //            value: Rally.util.DateTime.toIsoString(start_date)
-    //        });
-    //        filter_planned.push({
-    //            property: 'PlannedEndDate',
-    //            operator: '>=',
-    //            value: Rally.util.DateTime.toIsoString(start_date)
-    //        });
-    //    }
-    //
-    //    if (end_date){
-    //        filter_actual.push({
-    //            property: 'ActualEndDate',
-    //            operator: '<',
-    //            value: Rally.util.DateTime.toIsoString(end_date)
-    //        });
-    //        filter_planned.push({
-    //            property: 'PlannedEndDate',
-    //            operator: '<',
-    //            value: Rally.util.DateTime.toIsoString(end_date)
-    //        });
-    //    }
-    //
-    //    if (filter_actual.length > 1){
-    //        filter_actual = Rally.data.wsapi.Filter.and(filter_actual);
-    //    }
-    //    if (filter_planned.length > 1){
-    //        filter_planned = Rally.data.wsapi.Filter.and(filter_planned);
-    //    }
-    //    return filter_planned.or(filter_actual);
-    //},
     updateStoreFilters: function(){
 
         if (this.down('treegridcontainer')){
-          //  this.down('treegridcontainer').storeConfig.filters = this._getDateFilters();
             this.down('treegridcontainer').applyCustomFilter(this.down('treegridcontainer').currentCustomFilter);
         }
     },
+
+    _loadRollupData: function(records){
+
+        var loader = Ext.create('PortfolioItemCostTracking.RollupDataLoader',{
+            context: this.getContext(),
+            rootRecords: records,
+            listeners: {
+                rollupdataloaded: function(portfolioHash, stories){
+                    this._processRollupData(portfolioHash,stories,records);
+                },
+                loaderror: this._handleLoadError,
+                statusupdate: this._showStatus,
+                scope: this
+            }
+        });
+        loader.load(records);
+    },
+    _handleLoadError: function(msg){
+        Rally.ui.notify.Notifier.showError({message: msg});
+    },
+    _processRollupData: function(portfolioHash, stories, records){
+        var me = this;
+        console.log('rollupdataloaded', portfolioHash, stories.length ,stories, records,records.length);
+
+        portfolioHash[records[0].get('_type').toLowerCase()] = records;
+        this.rollupData.addRollupRecords(portfolioHash, stories);
+        this.rollupData.updateModels(records);
+
+        me._showStatus(null);
+    },
+    _showStatus: function(message){
+            if (message) {
+                Rally.ui.notify.Notifier.showStatus({
+                    message: message,
+                    showForever: true,
+                    closable: false,
+                    animateShowHide: false
+                });
+            } else {
+                Rally.ui.notify.Notifier.hide();
+            }
+    },
     _setRollupData: function(store, node, records, success){
-        var rollup_data = this.rollupData;
-        if (!rollup_data) {
-            this.rollupData = new PortfolioItemCostTracking.RollupData();
-            rollup_data = this.rollupData;
+
+        if (!store.model.getField('_rollupData')){
+            store.model.addField({name: '_rollupData', type: 'auto', defaultValue: null});
         }
 
-        _.each(records, function(r) {
-            rollup_data.setRollupData(r);
-        }, this);
-
+        var unloadedRecords = this.rollupData.updateModels(records);
+        if (unloadedRecords && unloadedRecords.length > 0 && node.parentNode === null){
+            this._loadRollupData(unloadedRecords);
+        }
+        this.down('treegridcontainer').getGrid().getView().refresh();
+        //this.down('treegridcontainer').getGrid().refresh()
     },
+
     _updateStore: function(modelNames){
-      //  var filters = this._getDateFilters();
 
         var field_names = [];
-        //if (filters === null){
-        //    return;
-        //}
         Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
             models: modelNames,
             //filters: filters,
@@ -320,13 +264,8 @@ Ext.define('PortfolioItemCostTracking', {
         }).then({
             scope: this,
             success: function(store) {
-                store.model.addField({name: '_rollupDataPreliminaryBudget', type: 'auto', defaultValue: null, displayName: 'Preliminary Budget'});
-                store.model.addField({name: '_rollupDataTotalCost', type: 'auto', defaultValue: null, displayName: 'Total Cost'});
-                store.model.addField({name: '_rollupDataRemainingCost', type: 'auto', defaultValue: null, displayName: 'Remaining Cost'});
-                store.model.addField({name: '_rollupDataActualCost', type: 'auto', defaultValue: null, displayName: 'Actual Cost'});
-                store.model.addField({name: '_rollupDataToolTip', type: 'string', defaultValue: null});
-
-                this._updateDisplay(store, modelNames);
+                 store.model.addField({name: '_rollupData', type: 'auto', defaultValue: null});
+                 this._updateDisplay(store, modelNames);
             }
         });
     },
@@ -340,12 +279,9 @@ Ext.define('PortfolioItemCostTracking', {
                 columnCfgs: this._getColumnCfgs(),
                 derivedColumns: this._getDerivedColumns(),
                 store: store,
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('cost-tree-grid')
+              //  stateful: true,
+              //  stateId: this.getContext().getScopedStateId('cost-tree-grid')
             },
-            //storeConfig: {
-            //    filters: this._getDateFilters()
-            //},
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
                 filterControlConfig: {
@@ -358,8 +294,8 @@ Ext.define('PortfolioItemCostTracking', {
                 ptype: 'treegridcontainerfieldpicker',
                 headerPosition: 'left',
                 modelNames: modelNames,
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('cost-tree-field-picker'),
+               // stateful: true,
+              //  stateId: this.getContext().getScopedStateId('cost-tree-field-picker'),
                 margin: '15px 0px 10px 10px'
             },{
                 ptype: 'rallygridboardactionsmenu',
@@ -385,22 +321,27 @@ Ext.define('PortfolioItemCostTracking', {
         });
     },
     _getDerivedColumns: function(){
+
         return [{
             text: "Actual Cost To Date",
-            xtype: 'costtemplatecolumn',
-            dataIndex: '_rollupDataActualCost'
+            xtype: 'actualcosttemplatecolumn',
+            dataIndex: '_rollupData',
+            tooltip: PortfolioItemCostTracking.Settings.getHeaderTooltip('_rollupDataActualCost')
         },{
             text: "Remaining Cost",
-            xtype: 'costtemplatecolumn',
-            dataIndex: '_rollupDataRemainingCost'
+            xtype: 'remainingcosttemplatecolumn',
+            dataIndex: '_rollupData',
+            tooltip: PortfolioItemCostTracking.Settings.getHeaderTooltip('_rollupDataRemainingCost')
         }, {
             text: 'Total Projected',
-            xtype: 'costtemplatecolumn',
-            dataIndex: '_rollupDataTotalCost'
+            xtype: 'totalcosttemplatecolumn',
+            dataIndex: '_rollupData',
+            tooltip: PortfolioItemCostTracking.Settings.getHeaderTooltip('_rollupDataTotalCost')
         },{
             text: 'Preliminary Budget',
-            xtype: 'costtemplatecolumn',
-            dataIndex: '_rollupDataPreliminaryBudget'
+            xtype: 'preliminarybudgettemplatecolumn',
+            dataIndex: '_rollupData',
+            tooltip: PortfolioItemCostTracking.Settings.getHeaderTooltip('_rollupDataPreliminaryBudget')
         }];
     },
     _getColumnCfgs: function(){

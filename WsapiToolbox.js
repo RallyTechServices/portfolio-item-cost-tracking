@@ -65,6 +65,59 @@ Ext.define('PortfolioItemCostTracking.WsapiToolbox', {
         });
         return deferred;
     },
+    fetchWsapiRecordsWithPaging: function(model, query_filters, fetch_fields, context){
+        var deferred = Ext.create('Deft.Deferred'),
+            pageSize = 200;
+
+        var store = Ext.create('Rally.data.wsapi.Store',{
+            model: model,
+            fetch: fetch_fields,
+            filters: query_filters,
+            context: context,
+            pageSize: pageSize
+        });
+
+        PortfolioItemCostTracking.WsapiToolbox.fetchWsapiCount(model, query_filters).then({
+            success: function(totalRecords){
+                var promises = [],
+                    totalPages = Math.ceil(totalRecords/pageSize);
+
+                for (var i=0; i< totalPages; i++){
+                    promises.push(PortfolioItemCostTracking.WsapiToolbox.loadStorePage(i, store));
+                }
+
+                Deft.Promise.all(promises).then({
+                    success: function(results){
+                        deferred.resolve(_.flatten(results));
+                    },
+                    failure: function(msg){
+                        deferred.reject(msg);
+                    }
+                });
+            },
+            failure: function(msg){
+                deferred.reject(msg);
+            }
+        });
+
+        return deferred;
+    },
+    loadStorePage: function(pageNum, store){
+        var deferred = Ext.create('Deft.Deferred');
+
+        store.loadPage(pageNum, {
+            callback: function(records, operation){
+                if (operation.wasSuccessful()){
+                    deferred.resolve(records);
+                } else {
+                    deferred.reject(operation.error.errors.join(','));
+                }
+
+            }
+        });
+
+        return deferred;
+    },
     fetchReleases: function(timebox){
 
         var deferred = Ext.create('Deft.Deferred'),
@@ -122,15 +175,22 @@ Ext.define('PortfolioItemCostTracking.WsapiToolbox', {
     },
     fetchPortfolioItemTypes: function(){
         var deferred = Ext.create('Deft.Deferred');
-
+        console.log('fetchPortfolioItemTypes', new Date());
         var store = Ext.create('Rally.data.wsapi.Store', {
             model: 'TypeDefinition',
             fetch: ['TypePath', 'Ordinal','Name'],
-            filters: [{
-                property: 'TypePath',
-                operator: 'contains',
-                value: 'PortfolioItem/'
-            }],
+            filters: [
+                {
+                    property: 'Parent.Name',
+                    operator: '=',
+                    value: 'Portfolio Item'
+                },
+                {
+                    property: 'Creatable',
+                    operator: '=',
+                    value: 'true'
+                }
+            ],
             sorters: [{
                 property: 'Ordinal',
                 direction: 'ASC'
@@ -138,6 +198,7 @@ Ext.define('PortfolioItemCostTracking.WsapiToolbox', {
         });
         store.load({
             callback: function(records, operation, success){
+                console.log('fetchPortfolioItemTypes callback', new Date());
                 if (success){
                     var portfolioItemTypes = new Array(records.length);
                     _.each(records, function(d){
@@ -160,12 +221,14 @@ Ext.define('PortfolioItemCostTracking.WsapiToolbox', {
     },
     fetchDoneStates: function(){
         var deferred = Ext.create('Deft.Deferred');
+        console.log('fetchDoneStates', new Date());
         Rally.data.ModelFactory.getModel({
             type: 'HierarchicalRequirement',
             success: function(model) {
                 var field = model.getField('ScheduleState');
                 field.getAllowedValueStore().load({
                     callback: function(records, operation, success) {
+                        console.log('fetchDoneStates callback', new Date());
                         if (success){
                             var values = [];
                             for (var i=records.length - 1; i > 0; i--){
