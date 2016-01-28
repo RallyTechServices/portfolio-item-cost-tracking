@@ -222,7 +222,6 @@ Ext.define('PortfolioItemCostTracking', {
         this.rollupData.updateModels(records);
 
         me._showStatus(null);
-        me.down('treegridcontainer').getGrid().getView().refresh();
     },
     _showStatus: function(message){
             if (message) {
@@ -238,10 +237,16 @@ Ext.define('PortfolioItemCostTracking', {
     },
     _setRollupData: function(store, node, records, success){
 
+        if (!store.model.getField('_rollupData')){
+            store.model.addField({name: '_rollupData', type: 'auto', defaultValue: null});
+        }
+
         var unloadedRecords = this.rollupData.updateModels(records);
         if (unloadedRecords && unloadedRecords.length > 0 && node.parentNode === null){
             this._loadRollupData(unloadedRecords);
         }
+        this.down('treegridcontainer').getGrid().getView().refresh();
+        //this.down('treegridcontainer').getGrid().refresh()
     },
 
     _updateStore: function(modelNames){
@@ -274,8 +279,8 @@ Ext.define('PortfolioItemCostTracking', {
                 columnCfgs: this._getColumnCfgs(),
                 derivedColumns: this._getDerivedColumns(),
                 store: store,
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('cost-tree-grid')
+              //  stateful: true,
+              //  stateId: this.getContext().getScopedStateId('cost-tree-grid')
             },
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
@@ -289,8 +294,8 @@ Ext.define('PortfolioItemCostTracking', {
                 ptype: 'treegridcontainerfieldpicker',
                 headerPosition: 'left',
                 modelNames: modelNames,
-                stateful: true,
-                stateId: this.getContext().getScopedStateId('cost-tree-field-picker'),
+               // stateful: true,
+              //  stateId: this.getContext().getScopedStateId('cost-tree-field-picker'),
                 margin: '15px 0px 10px 10px'
             },{
                 ptype: 'rallygridboardactionsmenu',
@@ -316,64 +321,28 @@ Ext.define('PortfolioItemCostTracking', {
         });
     },
     _getDerivedColumns: function(){
-        var me = this;
 
         return [{
             text: "Actual Cost To Date",
-            xtype: 'costtemplatecolumn',
+            xtype: 'actualcosttemplatecolumn',
             dataIndex: '_rollupData',
-            costField: '_rollupDataActualCost',
             tooltip: PortfolioItemCostTracking.Settings.getHeaderTooltip('_rollupDataActualCost')
         },{
             text: "Remaining Cost",
-            xtype: 'costtemplatecolumn',
+            xtype: 'remainingcosttemplatecolumn',
             dataIndex: '_rollupData',
-            costField: '_rollupDataRemainingCost',
             tooltip: PortfolioItemCostTracking.Settings.getHeaderTooltip('_rollupDataRemainingCost')
         }, {
             text: 'Total Projected',
-            xtype: 'costtemplatecolumn',
-            costField: '_rollupDataTotalCost',
+            xtype: 'totalcosttemplatecolumn',
             dataIndex: '_rollupData',
             tooltip: PortfolioItemCostTracking.Settings.getHeaderTooltip('_rollupDataTotalCost')
         },{
             text: 'Preliminary Budget',
-            xtype: 'costtemplatecolumn',
-            costField: '_rollupDataPreliminaryBudget',
+            xtype: 'preliminarybudgettemplatecolumn',
             dataIndex: '_rollupData',
             tooltip: PortfolioItemCostTracking.Settings.getHeaderTooltip('_rollupDataPreliminaryBudget')
         }];
-    },
-    _showColumnDescription: function(ct, column, evt, target_element, eOpts){
-        //if (this.dialog){
-        //    this.dialog.destroy();
-        //}
-
-       // var tool_tip = this.healthConfig.getTooltip(column.dataIndex);
-
-        //var items = [{
-        //        cls: 'ts_popover_description',
-        //        xtype:'container',
-        //        html: tool_tip
-        //    }];
-
-        console.log('_showColumnDescription', column.dataIndex, ct, ct.getEl());
-
-        Ext.create('Rally.ui.tooltip.ToolTip', {
-            target : ct.getEl(),
-            autoShow: true,
-            html: '<p><strong>This is a tooltip</strong></p>'
-        });
-
-
-        //this.dialog = Ext.create('Rally.ui.dialog.Dialog',{
-        //    defaults: { padding: 5, margin: 5 },
-        //    closable: true,
-        //    draggable: true,
-        //    title: column.text,
-        //    items: items
-        //});
-        //this.dialog.show();
     },
     _getColumnCfgs: function(){
 

@@ -1,3 +1,5 @@
+
+
 Ext.define('Ext.CostTemplate', {
     extend: 'Ext.grid.column.Template',
     alias: ['widget.costtemplatecolumn'],
@@ -11,6 +13,7 @@ Ext.define('Ext.CostTemplate', {
 
         me.tpl = new Ext.XTemplate('<tpl><div data-qtip="{[this.getTooltip(values)]}" style="cursor:pointer;text-align:right;">{[this.getCost(values)]}</div></tpl>',{
             costField: me.costField,
+
             getCost: function(values){
                 if (values[this.costField] === null){
                     return PortfolioItemCostTracking.Settings.notAvailableText;
@@ -40,4 +43,35 @@ Ext.define('Ext.CostTemplate', {
         var data = Ext.apply({}, record.data._rollupData); //, record.getAssociatedData());
         return this.tpl.apply(data);
     }
+});
+
+/**
+ * Extended the cost template column class for each specific type
+ * becuase if I pass in a custom property (eg costField), it
+ * gets lost when the columns refresh
+ *
+ */
+
+Ext.define('Ext.ActualCostTemplate',{
+    extend: 'Ext.CostTemplate',
+    alias: ['widget.actualcosttemplatecolumn'],
+    costField: '_rollupDataActualCost'
+});
+
+Ext.define('Ext.TotalCostTemplate',{
+    extend: 'Ext.CostTemplate',
+    alias: ['widget.totalcosttemplatecolumn'],
+    costField: '_rollupDataTotalCost'
+});
+
+Ext.define('Ext.RemainingCostTemplate',{
+    extend: 'Ext.CostTemplate',
+    alias: ['widget.remainingcosttemplatecolumn'],
+    costField: '_rollupDataRemainingCost'
+});
+
+Ext.define('Ext.PreliminaryBudgetTemplate',{
+    extend: 'Ext.CostTemplate',
+    alias: ['widget.preliminarybudgettemplatecolumn'],
+    costField: '_rollupDataPreliminaryBudget'
 });

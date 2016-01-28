@@ -109,7 +109,6 @@ Ext.define('TreeGridContainer', {
             //clean up records in the store to free up memory
             grid.store.clearData();
         }
-
         this.callParent(arguments);
     },
     getGrid: function () {
@@ -167,24 +166,6 @@ Ext.define('TreeGridContainer', {
     getAvailableGridBoardHeight: function () {
         return this.getHeight() - this.down('#header').getHeight() - 10;
     },
-    _mergeColumnConfigs: function(newColumns, oldColumns) {
-        var columns  = _.map(newColumns, function(newColumn) {
-            var oldColumn = _.find(oldColumns, {dataIndex: this._getDataIndex(newColumn)});
-            if (oldColumn) {
-                return this._getColumnConfigFromColumn(oldColumn);
-            }
-
-            return newColumn;
-        }, this);
-
-        _.each(oldColumns, function(c){
-            if (c.costField){
-                columns.push(c);
-            }
-        });
-
-        return columns;
-    },
     /**
      * This function is called from the FieldPicker plugin to update the displayed fields
      * In the Gridboard, this calls the reconfigureWithColumns function on the TreeGrid
@@ -192,8 +173,8 @@ Ext.define('TreeGridContainer', {
      */
     updateFields: function(fields, reconfigureColumns, suspendLoad){
 
-        var updated_fields = Ext.Array.merge(fields, _.pluck(this.gridConfig.derivedColumns, 'dataIndex'));
-        this.getGrid().reconfigureWithColumns(updated_fields, reconfigureColumns, suspendLoad);
+      //  var updated_fields = fields.concat(_.pluck(this.gridConfig.derivedColumns, 'dataIndex'));
+        this.getGrid().reconfigureWithColumns(fields, reconfigureColumns, suspendLoad);
 
     },
     _getGridConfig: function () {
@@ -212,6 +193,7 @@ Ext.define('TreeGridContainer', {
             }, this.gridConfig);
 
             config.columnCfgs = columnCfgs;
+        console.log('config.columnCfgs', columnCfgs);
 
         if (_.isEmpty(config.store)) {
             Ext.Error.raise('No grid store configured');
@@ -220,7 +202,6 @@ Ext.define('TreeGridContainer', {
     },
     _getSummaryColumns: function(){
         return [];
-        //return [{field: '_rollupDataActualCost', type: 'sum'}];
     },
 
     _getConfiguredFilters: function (extraFilters, types) {
@@ -254,8 +235,6 @@ Ext.define('TreeGridContainer', {
         grid.store.filter(this._getConfiguredFilters(filterObj.filters || [], filterObj.types || []));
     },
     _onGridLoad: function () {
-
-
         this.fireEvent('load', this);
 
         if (Rally.BrowserTest) {

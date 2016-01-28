@@ -10,6 +10,7 @@
       "CostPerProjectSettings.js",
       "RollupDataItem.js",
       "RollupCalculator.js",
+      "overrides.js",
       "ParallelThrottle.js",
       "RollupDataLoader.js",
       "ProjectPicker.js",

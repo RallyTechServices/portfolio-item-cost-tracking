@@ -82,7 +82,7 @@
         },
         _calculatePortfolioItemRollups: function(){
            _.each(this.rollupItems, function(item){
-                if (item && !item.parent){
+                if (item && !item.parent && /^portfolioitem/.test(item._type)){
                     item.processChildren();
                 }
             });
@@ -90,10 +90,10 @@
         updateModels: function(records){
             records = records || [];
             var unloadedModels = [];
-
             _.each(records, function(r){
                 var rollupItem = this.rollupItems[r.get('ObjectID')] || null;
                 if (rollupItem){
+                    console.log('r.get', r.get('_rollupData'));
                     r.set('_rollupData', rollupItem);
                 } else {
                     unloadedModels.push(r);
