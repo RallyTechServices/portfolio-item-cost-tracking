@@ -183,7 +183,7 @@
         var filters = this._getFilters(),
             fetch = PortfolioItemCostTracking.Settings.getTreeFetch(additionalFields),
             root_model = this.modelNames[0];
-
+        console.log('_showExportMenu', fetch,additionalFields);
          var exporter = new PortfolioItemCostTracking.Exporter();
         exporter.fetchExportData(root_model,filters,fetch,columnCfgs).then({
             scope: this,
@@ -623,7 +623,7 @@
         }
 
 
-       return Ext.Array.merge(PortfolioItemCostTracking.Settings.getStoryFetch(),
+       return Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getStoryFetch(),
                                 PortfolioItemCostTracking.Settings.getPortfolioItemFetch(),
                                 (PortfolioItemCostTracking.Settings.getCalculationTypeSettings().requiredTaskFetch || []));
 
@@ -1198,12 +1198,35 @@
         this._rollupDataPreliminaryBudget = this._calculatePreliminaryBudget(record.getData());
         this._rollupDataTotalCost = this.getPreliminaryBudget();
         this._rollupDataToolTip = this.getTooltip();
+
+        Ext.apply(this, record.getData());
     },
     addChild: function(objectID){
         if (!this.children){
             this.children = [];
         }
         this.children.push(objectID);
+    },
+    getExportRow: function(columns, ancestors){
+        var rec = Ext.clone(ancestors);
+
+        rec[this._type] = this.FormattedID;
+
+        rec.type = PortfolioItemCostTracking.Settings.getTypePathDisplayName(this._type);
+        _.each(columns, function(c){
+            var field = c.costField || c.dataIndex || null;
+            if (field){
+                var data = this[field];
+                if (Ext.isObject(data)){
+                    rec[field] = data._refObjectName;
+                } else if (Ext.isDate(data)){
+                    rec[field] = Rally.util.DateTime.formatWithDefaultDateTime(data);
+                } else {
+                    rec[field] = data;
+                }
+            }
+        }, this);
+        return rec;
     },
     _calculatePreliminaryBudget: function(data){
         var preliminaryBudgetField = PortfolioItemCostTracking.Settings.preliminaryBudgetField;
@@ -1303,9 +1326,8 @@ Ext.define('PortfolioItemCostTracking.UpperLevelPortfolioRollupItem',{
 Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
     extend: 'PortfolioItemCostTracking.PortfolioRollupItem',
 
-    processChildren: function(stories, projectCostPerUnit, normalizedCostPerUnit, totalFn, actualFn){
-
-        if (!stories || stories.length === 0){
+    processChildren: function(){
+        if (!this.children || this.children.length ===0){
             return;
         }
 
@@ -1316,22 +1338,21 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
             actualUnitsSum = 0,
             projectCosts = {};
 
+        for (var i=0; i< this.children.length ; i++){
+            var childData = this.children[i];
 
-
-        for (var i=0; i<stories.length; i++){
-            var childData = stories[i].getData();
             if (childData.PortfolioItem && childData.PortfolioItem.ObjectID === objectID) {
 
-                var totalUnits = totalFn(childData) || 0,
-                    actualUnits = actualFn(childData) || 0;
+                var totalUnits = childData.__totalUnits, //totalFn(childData) || 0,
+                    actualUnits = childData.__actualUnits;  //actualFn(childData) || 0;
 
                 totalUnitsSum += totalUnits;
                 actualUnitsSum += actualUnits;
                 projectCosts = this._updateProjectNameAndCostHash(projectCosts, childData.Project);
 
-                var costPerUnit = projectCostPerUnit[childData.Project._ref] || normalizedCostPerUnit;
-                rollupDataTotal += (totalUnits * costPerUnit) || 0;
-                rollupDataActual += (actualUnits * costPerUnit) || 0;
+
+                rollupDataTotal += childData._rollupDataTotalCost;
+                rollupDataActual += childData._rollupDataActualCost;
             }
         }
 
@@ -1366,6 +1387,29 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
     }
 });
 
+Ext.define('PortfolioItemCostTracking.UserStoryRollupItem', {
+    extend: 'PortfolioItemCostTracking.PortfolioRollupItem',
+    constructor: function(record, totalFn, actualFn) {
+        var data = record.getData();
+        this.__totalUnits = totalFn(data);
+        this.__actualUnits = actualFn(data);
+        this._notEstimated = false;
+        var costPerUnit = PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
+
+        this._rollupDataTotalCost = (this.__totalUnits * costPerUnit) || 0;
+        this._rollupDataActualCost = (this.__actualUnits * costPerUnit) || 0;
+        this._rollupDataRemainingCost = this._rollupDataTotalCost - this._rollupDataActualCost;
+
+        this.parent = record.get('PortfolioItem') && record.get('PortfolioItem').ObjectID || null;
+        this.objectID = data.ObjectID;
+
+        this._rollupDataPreliminaryBudget = null;
+        this._rollupDataToolTip = null;
+
+        Ext.apply(this, data);
+    }
+});
+
                 (function() {
     var Ext = window.Ext4 || window.Ext;
 
@@ -1383,22 +1427,20 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
             this.portfolioItemTypes = PortfolioItemCostTracking.Settings.getPortfolioItemTypes();
         },
         addRollupRecords: function(portfolioItemRecordHash, stories){
-           console.log('addRollupRecords', new Date());
             for (var i=this.portfolioItemTypes.length -1; i >= 0; i--){
                 var portfolioRecords = portfolioItemRecordHash[this.portfolioItemTypes[i]] || [];
                 this._addPortfolioRecords(portfolioRecords);
             }
             console.log('addRollupRecords._addStories', new Date());
             this._addStories(stories);
-            console.log('addRollupRecords._calculatePortfolioItemRollups', new Date());
-            this._calculatePortfolioItemRollups();
+             this._calculatePortfolioItemRollups();
             console.log('addRollupRecords. DONE', new Date());
         },
         getRollupData: function(record){
             if (!record){
                 return null;
             }
-            var objectID = record.get('ObjectID');
+            var objectID = record.ObjectID || record.get('ObjectID');
             return this.rollupItems[objectID] || null;
         },
         /**
@@ -1429,31 +1471,26 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
         },
 
         _addStories: function(stories){
-            var parentHash = {},
+            var parents = [],
                 rollupItems = this.rollupItems,
-                projectCostPerUnit = PortfolioItemCostTracking.Settings.projectCostPerUnit,
-                normalizedCostPerUnit = PortfolioItemCostTracking.Settings.normalizedCostPerUnit,
                 totalFn = PortfolioItemCostTracking.Settings.getCalculationTypeSettings().totalUnitsForStoryFn,
                 actualFn = PortfolioItemCostTracking.Settings.getCalculationTypeSettings().actualUnitsForStoryFn;
 
             for(var i =0; i < stories.length; i++){
-                var s = stories[i],
-                    pi = s.get('PortfolioItem'),
-                    parent = pi && pi.ObjectID;
+                var item = Ext.create('PortfolioItemCostTracking.UserStoryRollupItem', stories[i], totalFn, actualFn);
 
-                if (!parentHash[parent]){
-                    parentHash[parent] = [s];
-                } else {
-                    parentHash[parent].push(s);
+                this.rollupItems[item.ObjectID] = item;
+
+                if (item.parent && this.rollupItems[item.parent]){
+                    parents.push(item.parent);
+                    this.rollupItems[item.parent].addChild(item);
                 }
             }
-
-            _.each(parentHash, function(recs, objectID){
+            _.each(parents, function(objectID){
                 if (rollupItems[objectID]){
-                    rollupItems[objectID].processChildren(recs, projectCostPerUnit, normalizedCostPerUnit, totalFn, actualFn);
+                    rollupItems[objectID].processChildren();
                 }
             });
-
         },
         _calculatePortfolioItemRollups: function(){
            _.each(this.rollupItems, function(item){
@@ -1463,69 +1500,19 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
             });
         },
         updateModels: function(records){
-            if (!records || records.length === 0){
-                return [];
-            }
-            var totalFn = null,
-                actualFn = null,
-                type = records[0].get('_type').toLowerCase(),
-                calcSettings = PortfolioItemCostTracking.Settings.getCalculationTypeSettings(),
-                unloadedModels = [],
-                isPortfolioItem = /portfolioitem/.test(type);
+            records = records || [];
+            var unloadedModels = [];
 
-            if (type === 'task'){
-                totalFn = PortfolioItemCostTracking.Settings.getCalculationTypeSettings().totalUnitsForTaskFn;
-                actualFn = PortfolioItemCostTracking.Settings.getCalculationTypeSettings().actualUnitsForTaskFn;
-            }
-            if (type === 'hierarchicalrequirement'){
-                totalFn = PortfolioItemCostTracking.Settings.getCalculationTypeSettings().totalUnitsForStoryFn;
-                actualFn = PortfolioItemCostTracking.Settings.getCalculationTypeSettings().actualUnitsForStoryFn;
-            }
             _.each(records, function(r){
-                if (isPortfolioItem){
-                    if (!this._updatePortfolioModel(r, type)){
-                        unloadedModels.push(r);
-                    }
+                var rollupItem = this.rollupItems[r.get('ObjectID')] || null;
+                if (rollupItem){
+                    r.set('_rollupData', rollupItem);
                 } else {
-                    this._updateModel(r, calcSettings, totalFn, actualFn);
+                    unloadedModels.push(r);
                 }
+
             }, this);
             return unloadedModels;
-        },
-        _updatePortfolioModel: function(record){
-            var rollupItem = this.rollupItems[record.get('ObjectID')] || null;
-            if (rollupItem){
-                record.set('_rollupData', rollupItem);
-                return record;
-            }
-            return null;
-        },
-        _updateModel: function(record, calcSettings, totalFn, actualFn){
-
-            var data = record.getData(),
-                total = totalFn(data),
-                actual = actualFn(data),
-                totalCost = this._calculateCost(data, total),
-                actualCost = this._calculateCost(data, actual),
-                rollupData = {
-                    _rollupDataPreliminaryBudget: null,
-                    _rollupDataTotalCost: totalCost,
-                    _rollupDataActualCost: actualCost,
-                    _rollupDataRemainingCost: undefined,
-                    _rollupDataToolTip: null
-                };
-
-            if (totalCost !== null && actualCost !== null) {
-                rollupData._rollupDataRemainingCost = totalCost - actualCost;
-            }
-            record.set('_rollupData', rollupData);
-            return record;
-        },
-        _calculateCost: function(data, units){
-            if (units === null){
-                return null;
-            }
-            return units * PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
         }
     });
 }) ();
@@ -1585,9 +1572,12 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
         promise: undefined,
 
         constructor: function (config) {
+            console.log('loader', this, config);
             this.mixins.observable.constructor.call(this, config);
 
             this.context = config && config.context || null;
+
+            this.additionalFetch = config && config.additionalFetch || [];
         },
         load: function(rootRecords){
 
@@ -1656,18 +1646,20 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
             return portfolioRootLevel;
         },
         _getStoryConfig: function(portfolioRootLevel){
+            console.log('storefetch', PortfolioItemCostTracking.Settings.getStoryFetch(this.additionalFetch));
            return {
                 model: 'hierarchicalrequirement',
-                fetch: PortfolioItemCostTracking.Settings.getStoryFetch(),
+                fetch: PortfolioItemCostTracking.Settings.getStoryFetch(this.additionalFetch),
                 filters: this._buildFetchFilter(-1, portfolioRootLevel),
                statusDisplayString: "Loading data for {0} User Stories",
                completedStatusDisplayString: "Processing data"
             };
         },
         _getPortfolioItemConfig: function(idx, portfolioRootLevel){
+
             return {
                 model: PortfolioItemCostTracking.Settings.getPortfolioItemTypes()[idx],
-                fetch: PortfolioItemCostTracking.Settings.getPortfolioItemFetch(),
+                fetch: PortfolioItemCostTracking.Settings.getPortfolioItemFetch(this.additionalFetch),
                 filters: this._buildFetchFilter(idx, portfolioRootLevel),
                 statusDisplayString: "Loading data for {0} Portfolio Items"
             };
@@ -2865,6 +2857,11 @@ Ext.define('TreeGridContainerCustomFilterControl', {
 
 
                 Ext.define('PortfolioItemCostTracking.Exporter',{
+
+    mixins: {
+        observable: 'Ext.util.Observable'
+    },
+
     saveCSVToFile:function(csv,file_name,type_object){
         if (type_object === undefined){
             type_object = {type:'text/csv;charset=utf-8'};
@@ -2948,57 +2945,40 @@ Ext.define('TreeGridContainerCustomFilterControl', {
     },
     fetchExportData: function(rootModel, rootFilters, fetch, columns){
         var deferred = Ext.create('Deft.Deferred');
-        var recordCounter = 0;
         var rootFetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getPortfolioItemFetch());
+        var me = this;
 
         PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords(rootModel, rootFilters || [], rootFetch).then({
             scope: this,
             success: function(records){
-
-                var recordTotal = records.length;
-
-                var oids = _.map(records, function(r){ return r.get('ObjectID'); });
-
-                var loader = Ext.create('PortfolioItemCostTracking.RollupDataLoader',{
-                    context: this.getContext(),
+                    console.log('records',records, fetch);
+                  var loader = Ext.create('PortfolioItemCostTracking.RollupDataLoader',{
                     rootRecords: records,
-                    fetch: fetch,
+                    additionalFetch: fetch,
                     listeners: {
                         rollupdataloaded: function(portfolioHash, stories){
-                            this._processRollupData(portfolioHash,stories,records);
+                            var rollupData = Ext.create('PortfolioItemCostTracking.RollupCalculator', {});
+
+                            portfolioHash[records[0].get('_type').toLowerCase()] = records;
+                            rollupData.addRollupRecords(portfolioHash, stories);
+                            rollupData.updateModels(records);
+
+                            var exportData = me._getExportableRollupData(records,columns, rollupData);
+                            columns = me._getAncestorTypeColumns(rootModel).concat(columns);
+
+                            var csv = me._transformExportableRollupDataToDelimitedString(exportData, columns);
+                            deferred.resolve(csv);
                         },
-                        loaderror: this._handleLoadError,
-                        statusupdate: this._showStatus,
+                        loaderror: function(msg){
+                            deferred.reject(msg);
+                        },
+                        statusupdate: function(status){
+                            this.fireEvent('statusupdate', status);
+                        },
                         scope: this
                     }
                 });
                 loader.load(records);
-
-
-                //var rollupData = Ext.create('PortfolioItemCostTracking.RollupCalculator',{
-                //    fetch: fetch,
-                //    listeners: {
-                //        scope: this,
-                //        dataUpdated: function(data){
-                //            //console.log('dataUpdated', data, recordCounter, recordTotal);
-                //            recordCounter++;
-                //            if (recordCounter == recordTotal){
-                //                var exportData = this._getExportableRollupData(oids,columns, rollupData);
-                //
-                //                columns = this._getAncestorTypeColumns(rootModel).concat(columns);
-                //                var csv = this._transformExportableRollupDataToDelimitedString(exportData, columns);
-                //                deferred.resolve(csv);
-                //            }
-                //        },
-                //        error: function(msg){
-                //            deferred.reject(msg);
-                //        }
-                //    }
-                //});
-                //
-                //_.each(records, function(r) {
-                //    rollupData.setRollupData(r);
-                //}, this);
             },
             failure: function(msg){
                 deferred.reject(msg);
@@ -3012,7 +2992,7 @@ Ext.define('TreeGridContainerCustomFilterControl', {
             rowDelimiter = "\r\n",
             re = new RegExp(delimiter + '|\"|\r|\n','g');
 
-        var column_keys = _.pluck(columns, 'dataIndex'),
+        var column_keys = _.map(columns, function(c){ return c.costField || c.dataIndex; }),
             column_headers = _.pluck(columns, 'text');
 
         csvArray.push(column_headers.join(delimiter));
@@ -3043,57 +3023,62 @@ Ext.define('TreeGridContainerCustomFilterControl', {
      * @returns {Array}
      * @private
      */
-    _getExportableRollupData: function(rootObjectIDs, columns, rollupData){
+    _getExportableRollupData: function(records, columns, rollupData){
 
-        var exportData = [];
+        var exportData = [],
+            me = this;
 
-        _.each(rootObjectIDs, function(oid){
-            var obj = rollupData.getRollupItem(oid);
+
+        _.each(records, function(r){
+            var obj = rollupData.getRollupData(r);
             if (obj){
                 var ancestors = {};
-                var rec = this._getExportDataRow(obj, columns , ancestors);
+                var rec = obj.getExportRow(columns, ancestors);
                 exportData.push(rec);
-                this._addExportChildren(obj,exportData, columns, rollupData,ancestors);
+                me._addExportChildren(obj,exportData, columns, rollupData,ancestors);
             }
-        },this);
+        }, this);
         return exportData;
     },
     _addExportChildren: function(obj, exportData, columns, rollupData,ancestors){
-        var new_ancestors = Ext.clone(ancestors);
-        new_ancestors[obj.getData('type')] = obj.getData('FormattedID');
+        var new_ancestors = Ext.clone(ancestors),
+            me = this;
+        new_ancestors[obj._type] = obj.FormattedID;
 
         var children = obj.children;
         if (children && children.length > 0){
             _.each(children, function(c){
-                var row = this._getExportDataRow(rollupData.getRollupItem(c),columns, new_ancestors);
+                var row = c.getExportRow(columns, new_ancestors);
                 exportData.push(row);
-                this._addExportChildren(rollupData.getRollupItem(c), exportData, columns, rollupData, new_ancestors);
+                me._addExportChildren(c, exportData, columns, rollupData, new_ancestors);
             }, this);
         }
         return;
     },
-    _getExportDataRow: function(obj, columns, ancestors){
-        var rec = Ext.clone(ancestors),
-            type = obj.getData('type');
-
-        rec[type] = obj.getData('FormattedID');
-        rec.type = PortfolioItemCostTracking.Settings.getTypePathDisplayName(obj.getData('type'));
-        _.each(columns, function(c){
-            var field = c.dataIndex || null;
-            if (field){
-                var data = obj.getData(field);
-
-                if (Ext.isObject(data)){
-                    rec[field] = data._refObjectName;
-                } else if (Ext.isDate(data)){
-                    rec[field] = Rally.util.DateTime.formatWithDefaultDateTime(data);
-                } else {
-                    rec[field] = data;
-                }
-            }
-        });
-        return rec;
-    },
+    //_getExportDataRow: function(obj, columns, ancestors){
+    //
+    //    var rec = Ext.clone(ancestors),
+    //        type = obj._type; //obj.getData('type');
+    //
+    //    rec[type] = obj.FormattedID;
+    //    rec.type = PortfolioItemCostTracking.Settings.getTypePathDisplayName(obj._type);
+    //    _.each(columns, function(c){
+    //        var field = c.costField || c.dataIndex || null;
+    //        if (field){
+    //            var data = obj[field];
+    //            console.log('data', field, data, obj);
+    //            if (Ext.isObject(data)){
+    //                rec[field] = data._refObjectName;
+    //            } else if (Ext.isDate(data)){
+    //                rec[field] = Rally.util.DateTime.formatWithDefaultDateTime(data);
+    //            } else {
+    //                rec[field] = data;
+    //            }
+    //        }
+    //    });
+    //    console.log('data', rec);
+    //    return rec;
+    //},
     _getAncestorTypeColumns: function(rootModel){
         var piTypes = PortfolioItemCostTracking.Settings.getPortfolioItemTypeObjects(),
             piIdx = -1;

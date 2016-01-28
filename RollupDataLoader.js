@@ -15,9 +15,12 @@
         promise: undefined,
 
         constructor: function (config) {
+            console.log('loader', this, config);
             this.mixins.observable.constructor.call(this, config);
 
             this.context = config && config.context || null;
+
+            this.additionalFetch = config && config.additionalFetch || [];
         },
         load: function(rootRecords){
 
@@ -86,18 +89,20 @@
             return portfolioRootLevel;
         },
         _getStoryConfig: function(portfolioRootLevel){
+            console.log('storefetch', PortfolioItemCostTracking.Settings.getStoryFetch(this.additionalFetch));
            return {
                 model: 'hierarchicalrequirement',
-                fetch: PortfolioItemCostTracking.Settings.getStoryFetch(),
+                fetch: PortfolioItemCostTracking.Settings.getStoryFetch(this.additionalFetch),
                 filters: this._buildFetchFilter(-1, portfolioRootLevel),
                statusDisplayString: "Loading data for {0} User Stories",
                completedStatusDisplayString: "Processing data"
             };
         },
         _getPortfolioItemConfig: function(idx, portfolioRootLevel){
+
             return {
                 model: PortfolioItemCostTracking.Settings.getPortfolioItemTypes()[idx],
-                fetch: PortfolioItemCostTracking.Settings.getPortfolioItemFetch(),
+                fetch: PortfolioItemCostTracking.Settings.getPortfolioItemFetch(this.additionalFetch),
                 filters: this._buildFetchFilter(idx, portfolioRootLevel),
                 statusDisplayString: "Loading data for {0} Portfolio Items"
             };

@@ -210,7 +210,7 @@ Ext.define('PortfolioItemCostTracking.Settings', {
         }
 
 
-       return Ext.Array.merge(PortfolioItemCostTracking.Settings.getStoryFetch(),
+       return Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getStoryFetch(),
                                 PortfolioItemCostTracking.Settings.getPortfolioItemFetch(),
                                 (PortfolioItemCostTracking.Settings.getCalculationTypeSettings().requiredTaskFetch || []));
 

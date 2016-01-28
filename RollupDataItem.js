@@ -22,12 +22,35 @@ Ext.define('PortfolioItemCostTracking.PortfolioRollupItem',{
         this._rollupDataPreliminaryBudget = this._calculatePreliminaryBudget(record.getData());
         this._rollupDataTotalCost = this.getPreliminaryBudget();
         this._rollupDataToolTip = this.getTooltip();
+
+        Ext.apply(this, record.getData());
     },
     addChild: function(objectID){
         if (!this.children){
             this.children = [];
         }
         this.children.push(objectID);
+    },
+    getExportRow: function(columns, ancestors){
+        var rec = Ext.clone(ancestors);
+
+        rec[this._type] = this.FormattedID;
+
+        rec.type = PortfolioItemCostTracking.Settings.getTypePathDisplayName(this._type);
+        _.each(columns, function(c){
+            var field = c.costField || c.dataIndex || null;
+            if (field){
+                var data = this[field];
+                if (Ext.isObject(data)){
+                    rec[field] = data._refObjectName;
+                } else if (Ext.isDate(data)){
+                    rec[field] = Rally.util.DateTime.formatWithDefaultDateTime(data);
+                } else {
+                    rec[field] = data;
+                }
+            }
+        }, this);
+        return rec;
     },
     _calculatePreliminaryBudget: function(data){
         var preliminaryBudgetField = PortfolioItemCostTracking.Settings.preliminaryBudgetField;
@@ -127,9 +150,8 @@ Ext.define('PortfolioItemCostTracking.UpperLevelPortfolioRollupItem',{
 Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
     extend: 'PortfolioItemCostTracking.PortfolioRollupItem',
 
-    processChildren: function(stories, projectCostPerUnit, normalizedCostPerUnit, totalFn, actualFn){
-
-        if (!stories || stories.length === 0){
+    processChildren: function(){
+        if (!this.children || this.children.length ===0){
             return;
         }
 
@@ -140,22 +162,21 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
             actualUnitsSum = 0,
             projectCosts = {};
 
+        for (var i=0; i< this.children.length ; i++){
+            var childData = this.children[i];
 
-
-        for (var i=0; i<stories.length; i++){
-            var childData = stories[i].getData();
             if (childData.PortfolioItem && childData.PortfolioItem.ObjectID === objectID) {
 
-                var totalUnits = totalFn(childData) || 0,
-                    actualUnits = actualFn(childData) || 0;
+                var totalUnits = childData.__totalUnits, //totalFn(childData) || 0,
+                    actualUnits = childData.__actualUnits;  //actualFn(childData) || 0;
 
                 totalUnitsSum += totalUnits;
                 actualUnitsSum += actualUnits;
                 projectCosts = this._updateProjectNameAndCostHash(projectCosts, childData.Project);
 
-                var costPerUnit = projectCostPerUnit[childData.Project._ref] || normalizedCostPerUnit;
-                rollupDataTotal += (totalUnits * costPerUnit) || 0;
-                rollupDataActual += (actualUnits * costPerUnit) || 0;
+
+                rollupDataTotal += childData._rollupDataTotalCost;
+                rollupDataActual += childData._rollupDataActualCost;
             }
         }
 
@@ -187,5 +208,28 @@ Ext.define('PortfolioItemCostTracking.LowestLevelPortfolioRollupItem',{
         }
         projectCosts[name] = cost;
         return projectCosts;
+    }
+});
+
+Ext.define('PortfolioItemCostTracking.UserStoryRollupItem', {
+    extend: 'PortfolioItemCostTracking.PortfolioRollupItem',
+    constructor: function(record, totalFn, actualFn) {
+        var data = record.getData();
+        this.__totalUnits = totalFn(data);
+        this.__actualUnits = actualFn(data);
+        this._notEstimated = false;
+        var costPerUnit = PortfolioItemCostTracking.Settings.getCostPerUnit(data.Project._ref);
+
+        this._rollupDataTotalCost = (this.__totalUnits * costPerUnit) || 0;
+        this._rollupDataActualCost = (this.__actualUnits * costPerUnit) || 0;
+        this._rollupDataRemainingCost = this._rollupDataTotalCost - this._rollupDataActualCost;
+
+        this.parent = record.get('PortfolioItem') && record.get('PortfolioItem').ObjectID || null;
+        this.objectID = data.ObjectID;
+
+        this._rollupDataPreliminaryBudget = null;
+        this._rollupDataToolTip = null;
+
+        Ext.apply(this, data);
     }
 });

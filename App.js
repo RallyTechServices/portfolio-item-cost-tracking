@@ -174,7 +174,7 @@ Ext.define('PortfolioItemCostTracking', {
         var filters = this._getFilters(),
             fetch = PortfolioItemCostTracking.Settings.getTreeFetch(additionalFields),
             root_model = this.modelNames[0];
-
+        console.log('_showExportMenu', fetch,additionalFields);
          var exporter = new PortfolioItemCostTracking.Exporter();
         exporter.fetchExportData(root_model,filters,fetch,columnCfgs).then({
             scope: this,

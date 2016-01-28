@@ -1,4 +1,9 @@
 Ext.define('PortfolioItemCostTracking.Exporter',{
+
+    mixins: {
+        observable: 'Ext.util.Observable'
+    },
+
     saveCSVToFile:function(csv,file_name,type_object){
         if (type_object === undefined){
             type_object = {type:'text/csv;charset=utf-8'};
@@ -82,57 +87,40 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
     },
     fetchExportData: function(rootModel, rootFilters, fetch, columns){
         var deferred = Ext.create('Deft.Deferred');
-        var recordCounter = 0;
         var rootFetch = Ext.Array.merge(fetch, PortfolioItemCostTracking.Settings.getPortfolioItemFetch());
+        var me = this;
 
         PortfolioItemCostTracking.WsapiToolbox.fetchWsapiRecords(rootModel, rootFilters || [], rootFetch).then({
             scope: this,
             success: function(records){
-
-                var recordTotal = records.length;
-
-                var oids = _.map(records, function(r){ return r.get('ObjectID'); });
-
-                var loader = Ext.create('PortfolioItemCostTracking.RollupDataLoader',{
-                    context: this.getContext(),
+                    console.log('records',records, fetch);
+                  var loader = Ext.create('PortfolioItemCostTracking.RollupDataLoader',{
                     rootRecords: records,
-                    fetch: fetch,
+                    additionalFetch: fetch,
                     listeners: {
                         rollupdataloaded: function(portfolioHash, stories){
-                            this._processRollupData(portfolioHash,stories,records);
+                            var rollupData = Ext.create('PortfolioItemCostTracking.RollupCalculator', {});
+
+                            portfolioHash[records[0].get('_type').toLowerCase()] = records;
+                            rollupData.addRollupRecords(portfolioHash, stories);
+                            rollupData.updateModels(records);
+
+                            var exportData = me._getExportableRollupData(records,columns, rollupData);
+                            columns = me._getAncestorTypeColumns(rootModel).concat(columns);
+
+                            var csv = me._transformExportableRollupDataToDelimitedString(exportData, columns);
+                            deferred.resolve(csv);
                         },
-                        loaderror: this._handleLoadError,
-                        statusupdate: this._showStatus,
+                        loaderror: function(msg){
+                            deferred.reject(msg);
+                        },
+                        statusupdate: function(status){
+                            this.fireEvent('statusupdate', status);
+                        },
                         scope: this
                     }
                 });
                 loader.load(records);
-
-
-                //var rollupData = Ext.create('PortfolioItemCostTracking.RollupCalculator',{
-                //    fetch: fetch,
-                //    listeners: {
-                //        scope: this,
-                //        dataUpdated: function(data){
-                //            //console.log('dataUpdated', data, recordCounter, recordTotal);
-                //            recordCounter++;
-                //            if (recordCounter == recordTotal){
-                //                var exportData = this._getExportableRollupData(oids,columns, rollupData);
-                //
-                //                columns = this._getAncestorTypeColumns(rootModel).concat(columns);
-                //                var csv = this._transformExportableRollupDataToDelimitedString(exportData, columns);
-                //                deferred.resolve(csv);
-                //            }
-                //        },
-                //        error: function(msg){
-                //            deferred.reject(msg);
-                //        }
-                //    }
-                //});
-                //
-                //_.each(records, function(r) {
-                //    rollupData.setRollupData(r);
-                //}, this);
             },
             failure: function(msg){
                 deferred.reject(msg);
@@ -146,7 +134,7 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
             rowDelimiter = "\r\n",
             re = new RegExp(delimiter + '|\"|\r|\n','g');
 
-        var column_keys = _.pluck(columns, 'dataIndex'),
+        var column_keys = _.map(columns, function(c){ return c.costField || c.dataIndex; }),
             column_headers = _.pluck(columns, 'text');
 
         csvArray.push(column_headers.join(delimiter));
@@ -177,57 +165,62 @@ Ext.define('PortfolioItemCostTracking.Exporter',{
      * @returns {Array}
      * @private
      */
-    _getExportableRollupData: function(rootObjectIDs, columns, rollupData){
+    _getExportableRollupData: function(records, columns, rollupData){
 
-        var exportData = [];
+        var exportData = [],
+            me = this;
 
-        _.each(rootObjectIDs, function(oid){
-            var obj = rollupData.getRollupItem(oid);
+
+        _.each(records, function(r){
+            var obj = rollupData.getRollupData(r);
             if (obj){
                 var ancestors = {};
-                var rec = this._getExportDataRow(obj, columns , ancestors);
+                var rec = obj.getExportRow(columns, ancestors);
                 exportData.push(rec);
-                this._addExportChildren(obj,exportData, columns, rollupData,ancestors);
+                me._addExportChildren(obj,exportData, columns, rollupData,ancestors);
             }
-        },this);
+        }, this);
         return exportData;
     },
     _addExportChildren: function(obj, exportData, columns, rollupData,ancestors){
-        var new_ancestors = Ext.clone(ancestors);
-        new_ancestors[obj.getData('type')] = obj.getData('FormattedID');
+        var new_ancestors = Ext.clone(ancestors),
+            me = this;
+        new_ancestors[obj._type] = obj.FormattedID;
 
         var children = obj.children;
         if (children && children.length > 0){
             _.each(children, function(c){
-                var row = this._getExportDataRow(rollupData.getRollupItem(c),columns, new_ancestors);
+                var row = c.getExportRow(columns, new_ancestors);
                 exportData.push(row);
-                this._addExportChildren(rollupData.getRollupItem(c), exportData, columns, rollupData, new_ancestors);
+                me._addExportChildren(c, exportData, columns, rollupData, new_ancestors);
             }, this);
         }
         return;
     },
-    _getExportDataRow: function(obj, columns, ancestors){
-        var rec = Ext.clone(ancestors),
-            type = obj.getData('type');
-
-        rec[type] = obj.getData('FormattedID');
-        rec.type = PortfolioItemCostTracking.Settings.getTypePathDisplayName(obj.getData('type'));
-        _.each(columns, function(c){
-            var field = c.dataIndex || null;
-            if (field){
-                var data = obj.getData(field);
-
-                if (Ext.isObject(data)){
-                    rec[field] = data._refObjectName;
-                } else if (Ext.isDate(data)){
-                    rec[field] = Rally.util.DateTime.formatWithDefaultDateTime(data);
-                } else {
-                    rec[field] = data;
-                }
-            }
-        });
-        return rec;
-    },
+    //_getExportDataRow: function(obj, columns, ancestors){
+    //
+    //    var rec = Ext.clone(ancestors),
+    //        type = obj._type; //obj.getData('type');
+    //
+    //    rec[type] = obj.FormattedID;
+    //    rec.type = PortfolioItemCostTracking.Settings.getTypePathDisplayName(obj._type);
+    //    _.each(columns, function(c){
+    //        var field = c.costField || c.dataIndex || null;
+    //        if (field){
+    //            var data = obj[field];
+    //            console.log('data', field, data, obj);
+    //            if (Ext.isObject(data)){
+    //                rec[field] = data._refObjectName;
+    //            } else if (Ext.isDate(data)){
+    //                rec[field] = Rally.util.DateTime.formatWithDefaultDateTime(data);
+    //            } else {
+    //                rec[field] = data;
+    //            }
+    //        }
+    //    });
+    //    console.log('data', rec);
+    //    return rec;
+    //},
     _getAncestorTypeColumns: function(rootModel){
         var piTypes = PortfolioItemCostTracking.Settings.getPortfolioItemTypeObjects(),
             piIdx = -1;
