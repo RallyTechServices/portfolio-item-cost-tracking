@@ -1,9 +1,15 @@
+/**
+ * Created this to allow for any custom fields to be used as the Preliminary Budget field
+ * Requirements changed to only allow Preliminary Budget and Refined Estimate.
+ */
+
 Ext.define('PortfolioItemCostTracking.NumberFieldComboBox', {
     requires: [],
     extend: 'Rally.ui.combobox.FieldComboBox',
     alias: 'widget.numberfieldcombobox',
     _isNotHidden: function(field) {
-        var validFields= ['PreliminaryEstimate','RefinedEstimate'];
+        var validFields= ['PreliminaryEstimate','RefinedEstimate'],
+            allowCustomNumberFields = false;
 
         if (!field.hidden) {
 
@@ -12,11 +18,10 @@ Ext.define('PortfolioItemCostTracking.NumberFieldComboBox', {
             }
 
             //Allow for custom number fields
-            //if (field.custom && field.attributeDefinition) {
-            //    return (field.attributeDefinition.AttributeType === "INTEGER" ||
-            //    field.attributeDefinition.AttributeType === "DECIMAL");
-            //
-            //}
+            if (allowCustomNumberFields && field.custom && field.attributeDefinition) {
+                return (field.attributeDefinition.AttributeType === "INTEGER" ||
+                field.attributeDefinition.AttributeType === "DECIMAL");
+            }
         }
         return false;
     }
