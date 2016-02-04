@@ -279,8 +279,8 @@ Ext.define('PortfolioItemCostTracking', {
                 columnCfgs: this._getColumnCfgs(),
                 derivedColumns: this._getDerivedColumns(),
                 store: store,
-              //  stateful: true,
-              //  stateId: this.getContext().getScopedStateId('cost-tree-grid')
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('cost-tree-grid')
             },
             plugins:[{
                 ptype: 'treegridcontainercustomfiltercontrol',
@@ -294,8 +294,8 @@ Ext.define('PortfolioItemCostTracking', {
                 ptype: 'treegridcontainerfieldpicker',
                 headerPosition: 'left',
                 modelNames: modelNames,
-               // stateful: true,
-              //  stateId: this.getContext().getScopedStateId('cost-tree-field-picker'),
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('cost-tree-field-picker'),
                 margin: '15px 0px 10px 10px'
             },{
                 ptype: 'rallygridboardactionsmenu',
